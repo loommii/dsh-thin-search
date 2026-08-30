@@ -1,6 +1,6 @@
 {
   "name": "dsh-thin-search",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Free web search for DeepSeek Harness: zero-cost keyless engines (Bing/DuckDuckGo/SearXNG/AnySearch) with automatic fallback, platform search, web_fetch, and a web settings card. No DeepSeek model or Anthropic-format API calls — plain HTTP only.",
   "type": "module",
   "main": "lib/index.js",
