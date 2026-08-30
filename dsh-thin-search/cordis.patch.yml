@@ -1,0 +1,25 @@
+# dsh-thin-search — free web search providers (no API key, no model calls)
+# Registers the web-thin-search plugin into ctx.web and a settings bridge
+# (/api/dsh-thin-search-settings) serving the "thin-search" namespace.
+# The engine (bing / ddg / ddg-lite / searxng / anysearch) is chosen from
+# Settings > Plugins > Web UI plugins > Thin Search, or settings.yaml:
+#   thin-search:
+#     provider: bing
+#     bingMarket: zh-CN
+#     region: cn-zh
+# Failed/empty engines automatically fall back to the next free engine.
+# web.searchProvider must point at this plugin's provider id (thin-search).
+- insert:
+    - id: web-thin-search
+      name: dsh-thin-search
+      config:
+        provider: bing
+        bingMarket: zh-CN
+# Take over the default search so the harness web_search tool uses this
+# plugin's provider (which internally contains all free engines).
+# Patch semantics replace the whole web config: keep fetchProvider so the
+# official web-fetch-http provider registration is preserved.
+- id: web
+  config:
+    searchProvider: thin-search
+    fetchProvider: http
