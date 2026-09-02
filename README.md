@@ -1,7 +1,7 @@
 # dsh-thin-search
 
 [![node](https://img.shields.io/badge/node-%E2%89%A520-339933)](package.json)
-[![dsh](https://img.shields.io/badge/dsh-%E2%89%A50.1.1--rc.1-4c8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-%E2%89%A50.1.2--alpha.2-4c8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/dsh--plugin-blue)](https://github.com/deepseek-ai/deepseek-harness)
 
 **DeepSeek Harness 免费搜索插件 —— 零成本、零 API key、零模型调用。**
@@ -177,8 +177,10 @@ Search engine test:
 
 | 项目 | 要求 |
 |---|---|
-| DSH | `>= 0.1.1-rc.1`（依赖 `@deepseek-ai/dsh-settings` / `dsh-tools` `>= 0.1.0-rc.6`） |
+| DSH | `>= 0.1.2-alpha.2`（依赖 `@deepseek-ai/dsh-settings` `>= 0.1.2-alpha.2` / `dsh-tools` `>= 0.1.0-rc.6`） |
 | Node.js | `>= 20` |
+
+> **从 v0.1.x 升级**：dsh v0.1.2-alpha.2 对 settings seam 做了破坏性重构——`installSettingsSection` / `settingsNamespace` 被移除，改用 `SettingsProvider.installSection`（见 dsh-v0.1.2-alpha.2+）。因此本插件 v0.2.0 仅支持 dsh ≥ 0.1.2-alpha.2；仍在 dsh 0.1.1 的用户请继续使用插件 v0.1.1。
 
 ### 与官方插件的关系
 
@@ -248,8 +250,10 @@ Set `thin-search.proxy` (e.g. `http://127.0.0.1:7890`) in the settings page or `
 
 | Item | Requirement |
 |---|---|
-| DSH | `>= 0.1.1-rc.1` |
+| DSH | `>= 0.1.2-alpha.2` |
 | Node.js | `>= 20` |
+
+> **Upgrading from v0.1.x**: dsh v0.1.2-alpha.2 shipped a breaking settings-seam refactor — the module-level `installSettingsSection` / `settingsNamespace` helpers were removed in favor of `SettingsProvider.installSection`. Plugin v0.2.0 therefore requires dsh ≥ 0.1.2-alpha.2; stay on plugin v0.1.1 if you are still on dsh 0.1.1.
 
 ### License
 
