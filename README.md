@@ -36,7 +36,7 @@ DSH 官方自带的网页搜索插件（`dsh-web-search-deepseek`）会强制调
 | 🧪 **引擎测试** | `free_search_test` 工具 + 设置页"测试引擎"按钮 |
 | 🕒 **时效** | 按时间范围限定搜索结果，如「最近一周的新闻」 |
 | 🔎 **平台搜索** | `platform_search`：GitHub / V2EX / Bilibili / Reddit / Hacker News / Stack Overflow / Wikipedia / npm（公开 API，零 key） |
-| 🧠 **搜索增强** | 可选（默认关）：LLM 把口语化输入规范化为搜索关键词，改善中文问句效果；⚠️ 开启后消耗 Token |
+| 🧠 **搜索增强** | 可选（默认关）：LLM 把口语化输入规范化为搜索关键词，改善中文问句效果；⚠️ 开启后消耗 Token；支持自定义提示词 |
 | 🚀 **网络代理** | 内置 HTTP/HTTPS 代理（undici ProxyAgent），仅本插件生效，不污染 DSH 全局 |
 | 📦 **结果缓存** | LRU 50 条，TTL 0-5 分钟可配，防免费引擎限流 |
 | 🤝 **干净集成** | 实现官方 `WebSearchProvider` seam，与官方插件共存，patch 自动接管 `web.searchProvider` |
@@ -89,7 +89,7 @@ dsh plugin --profile web remove dsh-thin-search
 
 - **搜索提供方**：免费引擎（默认）/ 官方 DeepSeek 搜索 —— 切换会写 profile 的 `cordis.patch.yml`，**重启 DSH 后生效**（页面会提示）
 - **搜索引擎**：下拉框切换，保存即生效（默认 `anysearch`）
-- **搜索增强**：**默认关闭**。开启后会用 LLM 把口语化输入规范化为搜索关键词（如「今天美元兑换日元的汇率多少？」→「美元 日元 汇率」），改善 Bing 等引擎对中文问句的效果。⚠️ **开启后每次搜索会消耗 Token**；关闭则完全免费、零模型调用
+- **搜索增强**：**默认关闭**。开启后会用 LLM 把口语化输入规范化为搜索关键词（如「今天美元兑换日元的汇率多少？」→「美元 日元 汇率」），改善 Bing 等引擎对中文问句的效果。⚠️ **开启后每次搜索会消耗 Token**；关闭则完全免费、零模型调用。支持自定义增强系统提示词：在"搜索增强"卡片中，文本框始终显示当前实际生效的提示词（内置默认或自定义），可直接编辑；"恢复默认"按钮会覆盖为内置默认提示词
 - **增强模型**：可选指定用于搜索增强的 LLM 模型（下拉列出 DSH 中已配置的全部模型）。留空 = 跟随 DSH 默认模型；指定模型失败时自动回退默认模型
 - **网络代理**：可选填 HTTP/HTTPS 代理地址（如 `http://127.0.0.1:7890`），用于访问需要外网的引擎。V2Ray / Clash 需开启 HTTP 端口；不支持 SOCKS5。留空 = 直连，保存即生效
 - **平台搜索**：勾选启用的平台（`platform_search` 工具按此过滤）
@@ -208,7 +208,7 @@ DSH's official web-search plugin forces a DeepSeek V4 Flash model call in Anthro
 - **Zero model calls** — plain HTTP only; no tokens consumed
 - **Auto fallback** — any engine failure (rate limit / anti-bot / network / 0 results) automatically tries the next free engine, with a `Note: ... using ...` marker
 - **Engines**: `anysearch` (default, best for Chinese natural-language queries) · `bing` (fast, zh-CN) · `searxng` (multi-instance, custom instances) · `ddg` · `ddg-lite`
-- **Search enhancement** — optional (default OFF): rewrites natural-language queries into compact keywords via the current default LLM. ⚠️ Consumes tokens while ON; OFF keeps searching fully free
+- **Search enhancement** — optional (default OFF): rewrites natural-language queries into compact keywords via the current default LLM. ⚠️ Consumes tokens while ON; OFF keeps searching fully free. Supports custom system prompt: the textarea always shows the effective prompt (built-in default or custom), editable; "Reset to default" overwrites with the built-in default prompt
 - **Web settings page** — Settings → Search Engine
 - **Popup command** — `/thin-search-engine` in chat
 - **Engine test** — `free_search_test` tool + "Test engine" button
