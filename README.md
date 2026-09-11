@@ -1,7 +1,7 @@
 # dsh-thin-search
 
 [![node](https://img.shields.io/badge/node-%E2%89%A520-339933)](package.json)
-[![dsh](https://img.shields.io/badge/dsh-%E2%89%A50.1.2--alpha.2-4c8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-%E2%89%A50.1.5--alpha.1-4c8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/dsh--plugin-blue)](https://github.com/deepseek-ai/deepseek-harness)
 
 **DeepSeek Harness 免费搜索插件 —— 零成本、零 API key、零模型调用。**
@@ -177,10 +177,16 @@ Search engine test:
 
 | 项目 | 要求 |
 |---|---|
-| DSH | `>= 0.1.2-alpha.2`（依赖 `@deepseek-ai/dsh-settings` `>= 0.1.2-alpha.2` / `dsh-tools` `>= 0.1.0-rc.6`） |
+| DSH | `>= 0.1.5-alpha.1`（依赖 `@deepseek-ai/dsh-settings` / `dsh-tools` / `dsh-web` / `dsh-llm` 均 `>= 0.1.5-alpha.1`） |
 | Node.js | `>= 20` |
 
-> **从 v0.1.x 升级**：dsh v0.1.2-alpha.2 对 settings seam 做了破坏性重构——`installSettingsSection` / `settingsNamespace` 被移除，改用 `SettingsProvider.installSection`（见 dsh-v0.1.2-alpha.2+）。因此本插件 v0.2.0 仅支持 dsh ≥ 0.1.2-alpha.2；仍在 dsh 0.1.1 的用户请继续使用插件 v0.1.1。
+> **从 v0.3.0 升级**：dsh v0.1.5-alpha.1 起，客户端命令契约 `CommandContribution.description` 由 `string` 改为**惰性求值函数** `() => string`（核心运行时在渲染候选行时直接调用 `contribution.description()`）。v0.3.0 传的是字符串，会抛 `TypeError`；由于该异常发生在整个 `command` 斜杠源的 `candidates()` 内部，**全部官方命令会一起从 `/` 菜单消失**。v0.4.0 已修复并同步上移版本下限。
+
+> **同时修正（v0.4.0）**：三个自带工具（`free_search_test` / `platform_search` / `advanced_search`）的 `output.render` 原先返回裸字符串，而核心契约要求返回 `ContentBlock[]`（`{ type: "text", text }`）。已改为符合契约的数组形式。
+>
+> **说明（避免误读）**：这**不是**一次线上故障修复。这三个工具始终声明了 `finalizeContent`，核心会在结果落库前先套用它把字符串转成 `ContentBlock[]`，因此裸字符串从未真正进入 `tool-result.content`——实测全部会话日志（截至 2026-09-11，269 个会话文件）中，这三个工具共 120 次真实调用（111 成功 / 9 失败），落库结果 100% 是数组，无一例外，也从未出现过相关 TypeError。本次改动属于契约对齐与纵深防御（若日后移除 `finalizeContent`，或核心在规范化之前新增校验，裸字符串才会暴露）。输出文本与改动前逐字节一致，无行为变化。
+
+> **从 v0.1.x 升级**：dsh v0.1.2-alpha.2 对 settings seam 做了破坏性重构——`installSettingsSection` / `settingsNamespace` 被移除，改用 `SettingsProvider.installSection`（见 dsh-v0.1.2-alpha.2+）。插件 v0.2.0 起仅支持 dsh ≥ 0.1.2-alpha.2；仍在 dsh 0.1.1 的用户请使用插件 v0.1.1。
 
 ### 与官方插件的关系
 
@@ -250,10 +256,16 @@ Set `thin-search.proxy` (e.g. `http://127.0.0.1:7890`) in the settings page or `
 
 | Item | Requirement |
 |---|---|
-| DSH | `>= 0.1.2-alpha.2` |
+| DSH | `>= 0.1.5-alpha.1` |
 | Node.js | `>= 20` |
 
-> **Upgrading from v0.1.x**: dsh v0.1.2-alpha.2 shipped a breaking settings-seam refactor — the module-level `installSettingsSection` / `settingsNamespace` helpers were removed in favor of `SettingsProvider.installSection`. Plugin v0.2.0 therefore requires dsh ≥ 0.1.2-alpha.2; stay on plugin v0.1.1 if you are still on dsh 0.1.1.
+> **Upgrading from v0.3.0**: as of dsh v0.1.5-alpha.1, the client command contract `CommandContribution.description` changed from `string` to a **lazy thunk** `() => string` (the core runtime calls `contribution.description()` while rendering menu rows). v0.3.0 passed a string, which threw a `TypeError`; because that throw happens inside the whole `command` slash source's `candidates()`, **every official command disappeared from the `/` menu**. Fixed in v0.4.0, with the version floor raised accordingly.
+
+> **Also corrected in v0.4.0**: the three bundled tools (`free_search_test` / `platform_search` / `advanced_search`) returned a bare string from `output.render`, while the core contract requires `ContentBlock[]` (`{ type: "text", text }`). They now return conformant arrays.
+>
+> **Note (to prevent misreading)**: this was **not** a production bug fix. All three tools have always declared `finalizeContent`, which the core applies before a result is persisted, converting the string to `ContentBlock[]` — so the bare string never actually reached `tool-result.content`. Across every session log on the author's machine (269 session files, as of 2026-09-11) these three tools were invoked 120 times (111 succeeded, 9 failed), and 100% of the persisted results are arrays; the related `TypeError` never occurred. This change is contract alignment and defence in depth (it would only surface if `finalizeContent` were removed, or if the core added a check before normalization). Rendered text is byte-identical to before — no behavioural change.
+
+> **Upgrading from v0.1.x**: dsh v0.1.2-alpha.2 shipped a breaking settings-seam refactor — the module-level `installSettingsSection` / `settingsNamespace` helpers were removed in favor of `SettingsProvider.installSection`. Plugin v0.2.0 requires dsh ≥ 0.1.2-alpha.2; stay on plugin v0.1.1 if you are still on dsh 0.1.1.
 
 ### License
 
