@@ -4,3 +4,4 @@ dist/
 .DS_Store
 # 本地参考/临时文件
 tmp/
+.agent-teams
