@@ -1,16 +1,18 @@
 # dsh-thin-search — free web search providers (no API key, no model calls)
-# Registers the web-thin-search plugin into ctx.web and a settings bridge
-# (/api/dsh-thin-search-settings) serving the "thin-search" namespace.
-# The engine (bing / ddg / ddg-lite / searxng / anysearch) is chosen from
-# Settings > Plugins > Web UI plugins > Thin Search, or settings.yaml:
-#   thin-search:
+# Registers the thin-search profile entry, its custom settings page, and a
+# loopback settings bridge. DSH 0.1.7 persists user changes in the active
+# profile's cordis.patch.yml. The engine (bing / ddg / ddg-lite / searxng /
+# anysearch) is chosen from Settings > Plugins > Thin Search or by editing this
+# entry's config:
+#   id: thin-search
+#   config:
 #     provider: bing
 #     bingMarket: zh-CN
 #     region: cn-zh
 # Failed/empty engines automatically fall back to the next free engine.
 # web.searchProvider must point at this plugin's provider id (thin-search).
 - insert:
-    - id: web-thin-search
+    - id: thin-search
       name: dsh-thin-search
       config:
         provider: bing
