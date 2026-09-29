@@ -1,15 +1,19 @@
 {
   "name": "dsh-thin-search",
-  "version": "0.5.0",
-  "description": "Free web search for DeepSeek Harness: zero-cost keyless engines (Bing/DuckDuckGo/SearXNG/AnySearch) with automatic fallback, platform search, web_fetch, and a web settings card. No DeepSeek model or Anthropic-format API calls — plain HTTP only.",
+  "version": "0.5.1",
+  "description": "Free web search for DeepSeek Harness: zero-cost keyless engines (Bing/DuckDuckGo/SearXNG/AnySearch) with automatic fallback, platform search, web_fetch, and a Plugins-page configuration entry. No DeepSeek model or Anthropic-format API calls — plain HTTP only.",
   "type": "module",
   "main": "lib/index.js",
+  "icon": "./icon.svg",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
+    "icon.svg",
+    "locale/*.json",
     "lib/index.js",
     "lib/client.js",
     "lib/proxy.js",
@@ -66,7 +70,10 @@
       "patch": "cordis.patch.yml"
     },
     "client": {
-      "inject": [],
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ],
       "platform": "web"
     },
     "engines": {

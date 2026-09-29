@@ -31,9 +31,9 @@ DSH 官方自带的网页搜索插件（`dsh-web-search-deepseek`）会强制调
 | 🚫 **零模型调用** | 只发普通 HTTP 请求，不消耗任何 token，不依赖 Anthropic 协议 |
 | 🔁 **自动回退** | 任一引擎失败（限流/反爬/网络错误/0 结果）自动尝试下一个，结果注明实际生效引擎 |
 | 🌐 **多引擎** | AnySearch（默认）/ Bing / DuckDuckGo / SearXNG，支持自定义 SearXNG 实例 |
-| ⚙️ **网页设置页** | 设置 → 搜索引擎：引擎选择、官方搜索切换、增强开关、平台开关、缓存时长 |
+| ⚙️ **插件配置页** | 插件管理 → `dsh-thin-search` → **配置**：引擎选择、官方搜索切换、增强开关、平台开关、缓存时长 |
 | 💬 **弹出式切换** | 聊天框输入 `/thin-search-engine`，点选即切换引擎 |
-| 🧪 **引擎测试** | `free_search_test` 工具 + 设置页"测试引擎"按钮 |
+| 🧪 **引擎测试** | `free_search_test` 工具 + 插件配置页"测试引擎"按钮 |
 | 🕒 **时效** | 按时间范围限定搜索结果，如「最近一周的新闻」 |
 | 🔎 **平台搜索** | `platform_search`：GitHub / V2EX / Bilibili / Reddit / Hacker News / Stack Overflow / Wikipedia / npm（公开 API，零 key） |
 | 🧠 **搜索增强** | 可选（默认关）：LLM 把口语化输入规范化为搜索关键词，改善中文问句效果；⚠️ 开启后消耗 Token；支持自定义提示词 |
@@ -83,9 +83,9 @@ dsh plugin --profile web remove dsh-thin-search
 
 ### 使用
 
-#### 网页设置页（推荐）
+#### 插件配置页（推荐）
 
-打开 **设置 → 搜索引擎**：
+打开 **插件管理 → `dsh-thin-search` → 配置**（DSH 0.1.7 起插件配置统一挂在插件管理页）：
 
 - **搜索提供方**：免费引擎（默认）/ 官方 DeepSeek 搜索 —— 切换会写 profile 的 `cordis.patch.yml`，**重启 DSH 后生效**（页面会提示）
 - **搜索引擎**：下拉框切换，保存即生效（默认 `anysearch`）
@@ -133,7 +133,7 @@ DSH 0.1.7 起，用户设置直接持久化到当前 profile 的 `cordis.patch.y
 
 Bing / AnySearch 在多数网络环境可直接访问；DuckDuckGo / SearXNG / GitHub 等可能需要代理。本插件内置 HTTP/HTTPS 代理支持（基于 undici `ProxyAgent`），**无需设置系统环境变量**：
 
-- **设置 → 搜索引擎 → 网络代理**：填 `http://127.0.0.1:7890`（V2Ray / Clash 的 HTTP 端口），保存即生效，无需重启
+- **插件管理 → `dsh-thin-search` → 配置 → 网络代理**：填 `http://127.0.0.1:7890`（V2Ray / Clash 的 HTTP 端口），保存即生效，无需重启
 - 或直接写 `~/.dsh/profiles/<profile>/cordis.patch.yml` 中 `thin-search.config.proxy`
 - 留空 = 直连
 
@@ -168,12 +168,12 @@ Search engine test:
 
 #### platform_search（平台搜索）
 
-`platform_search` 支持 GitHub / V2EX / Bilibili / Reddit / Hacker News / Stack Overflow / Wikipedia / npm，全部走公开 API（零 key）。可在设置页勾选启用哪些平台。
+`platform_search` 支持 GitHub / V2EX / Bilibili / Reddit / Hacker News / Stack Overflow / Wikipedia / npm，全部走公开 API（零 key）。可在插件配置页勾选启用哪些平台。
 
 ### 工作原理
 
 - `lib/index.js`（host 端）：实现 `WebSearchProvider`（`id: thin-search` / `available()` / `search()`），统一引擎路由 + 自动回退 + 时间过滤解析 + 结果缓存；以 `thin-search` profile entry 接入 DSH 0.1.7 Settings；提供 `/api/dsh-thin-search-settings` 读写桥（describe / mutate / raw-search，仅限 loopback）；注册 `free_search_test`、`platform_search`、`advanced_search` 工具；动态注入引擎清单到系统提示词
-- `lib/client.js`（浏览器端）：React 设置页（挂 `settings.section` 插槽，设置 → 搜索引擎）+ `/thin-search-engine` 弹出式命令（`commandUi` popupSelect）
+- `lib/client.js`（浏览器端）：React 配置页（挂 `plugins.row.config` 插槽，key `dsh-thin-search#thin-search`，由 `ctx.configForms.whileServed` 守卫）+ `/thin-search-engine` 弹出式命令（`commandUi` popupSelect）
 - `lib/proxy.js`：undici `ProxyAgent` 封装，单例缓存 + `fetchWithProxy`，仅本插件使用
 - `cordis.patch.yml`：插件 loader 配置，patch 同时把 `web.searchProvider` 设为 `thin-search`（保留 `fetchProvider: http`）
 
@@ -184,7 +184,7 @@ Search engine test:
 | DSH | `>= 0.1.7-rc.1`（依赖 `@deepseek-ai/dsh-atomic-write` / `dsh-settings` / `dsh-tools` / `dsh-web` / `dsh-llm` 均 `>= 0.1.7-rc.1`） |
 | Node.js | `>= 22.19.0` |
 
-> **DSH 0.1.7 适配**：0.1.7 移除了旧的 `SettingsProvider.installSection()`，改为从 Loader profile entry 投影 `.volatile()` 配置。本插件现使用 `thin-search` 条目、`SettingsForms.configure({ auto: false })` 和 `SettingsForms.mutate()`；自定义设置页与 `/thin-search-engine` 命令保持不变，设置保存到当前 profile 的 `cordis.patch.yml`。entry id 特意沿用旧 `settings.yaml` 的 `thin-search:` section 名，因此 DSH 0.1.7 首次启动时可自动导入旧配置。
+> **DSH 0.1.7 适配**：0.1.7 移除了旧的 `SettingsProvider.installSection()`，改为从 Loader profile entry 投影 `.volatile()` 配置。本插件现使用 `thin-search` 条目、`SettingsForms.configure({ auto: false })` 和 `SettingsForms.mutate()`；自定义配置页从 `settings.section`（全局设置）迁到 `plugins.row.config`（插件管理页），`/thin-search-engine` 命令保持不变，设置保存到当前 profile 的 `cordis.patch.yml`。entry id 特意沿用旧 `settings.yaml` 的 `thin-search:` section 名，因此 DSH 0.1.7 首次启动时可自动导入旧配置。
 >
 > **从 v0.4.0 升级**：v0.4.0 仍依赖已移除的 settings namespace API，只能用于 DSH 0.1.5–0.1.6；升级 DSH 到 0.1.7 时必须使用 v0.5.0 或更高版本。若曾在 profile patch 中手工写过 `id: web-thin-search`，请改为 `id: thin-search`。
 
@@ -197,7 +197,7 @@ Search engine test:
 ### 与官方插件的关系
 
 - 官方 `web-search-deepseek`（`deepseek-official`）与本插件可共存；`searchProvider` 指向谁就用谁
-- 本插件默认通过 patch 接管搜索（无需 key、零成本）；**设置页"搜索提供方"开关**一键切回官方（写 profile patch 的 `searchProvider: deepseek-official`，需重启 DSH 生效），也可手动改 `~/.dsh/profiles/<profile>/cordis.patch.yml`
+- 本插件默认通过 patch 接管搜索（无需 key、零成本）；**插件配置页"搜索提供方"开关**一键切回官方（写 profile patch 的 `searchProvider: deepseek-official`，需重启 DSH 生效），也可手动改 `~/.dsh/profiles/<profile>/cordis.patch.yml`
 - 本插件**不包含**任何模型调用逻辑，也不读取 `DEEPSEEK_API_KEY` —— 第三方网关用户可直接使用
 
 ### License

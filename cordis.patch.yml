@@ -1,9 +1,9 @@
 # dsh-thin-search — free web search providers (no API key, no model calls)
-# Registers the thin-search profile entry, its custom settings page, and a
-# loopback settings bridge. DSH 0.1.7 persists user changes in the active
-# profile's cordis.patch.yml. The engine (bing / ddg / ddg-lite / searxng /
-# anysearch) is chosen from Settings > Plugins > Thin Search or by editing this
-# entry's config:
+# Registers the thin-search profile entry, its plugin-manager configuration
+# page (Plugins > dsh-thin-search > Configure), and a loopback settings bridge.
+# DSH 0.1.7 persists user changes in the active profile's cordis.patch.yml. The
+# engine (bing / ddg / ddg-lite / searxng / anysearch) is chosen from that page
+# or by editing this entry's config:
 #   id: thin-search
 #   config:
 #     provider: bing
