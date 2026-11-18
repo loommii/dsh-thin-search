@@ -154,6 +154,8 @@ describe('host tool contracts', () => {
       .rejects.toThrow('invalid timeRange')
     await expect(tool.execute({ query: 'q', timeRange: '' }, toolExec(new AbortController().signal) as never))
       .rejects.toThrow('invalid timeRange')
+    await expect(tool.execute({ query: 'q', timeRange: '2099-01-01' }, toolExec(new AbortController().signal) as never))
+      .rejects.toThrow('invalid timeRange')
     expect(called).toBe(false)
   })
 

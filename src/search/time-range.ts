@@ -58,18 +58,29 @@ function relativeUnitToDays(value: number, unit: string): number {
   return value
 }
 
+/** Whether an already-normalized absolute date is later than {@code now}'s UTC day. */
+function isFutureAbsoluteDate(date: string, now: Date): boolean {
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number]
+  const target = Date.UTC(year, month - 1, day)
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  return target > today
+}
+
 /**
  * Parse a time range from a fixed tier, a relative duration ({@code 12h},
  * {@code 3d}, {@code 2mo}, {@code 1y}), an absolute date ({@code 2026-07-01}),
- * or an already-parsed object. Invalid input returns undefined.
+ * or an already-parsed object. Invalid input, including an absolute date later
+ * than {@code now}'s day, returns undefined.
+ * @param input - tier, duration, date, or already-parsed object.
+ * @param now - reference instant for future-date validation; defaults to now.
  */
-export function parseTimeRange(input: unknown): TimeRange | undefined {
+export function parseTimeRange(input: unknown, now: Date = new Date()): TimeRange | undefined {
   if (input === undefined || input === null) return undefined
   if (typeof input === 'object') {
     const candidate = input as { days?: unknown; after?: unknown }
     if (typeof candidate.after === 'string') {
       const after = normalizeAbsoluteDate(candidate.after)
-      if (after !== undefined) return { after }
+      if (after !== undefined) return isFutureAbsoluteDate(after, now) ? undefined : { after }
     }
     if (typeof candidate.days === 'number' && Number.isFinite(candidate.days) && candidate.days > 0) {
       return { days: candidate.days }
@@ -82,7 +93,7 @@ export function parseTimeRange(input: unknown): TimeRange | undefined {
   const tier = TIER_DAYS[text]
   if (tier !== undefined) return { days: DAYS_BY_RANGE[tier] }
   const after = normalizeAbsoluteDate(text)
-  if (after !== undefined) return { after }
+  if (after !== undefined) return isFutureAbsoluteDate(after, now) ? undefined : { after }
   const match = RELATIVE.exec(text)
   if (match === null) return undefined
   const rawValue = match[1]
@@ -94,7 +105,11 @@ export function parseTimeRange(input: unknown): TimeRange | undefined {
   return { days }
 }
 
-/** Days between an absolute date and {@code now}, rounded up and clamped to at least one. */
+/**
+ * Days between an absolute date and {@code now}, rounded up and clamped to at
+ * least one. Future dates are rejected by {@link parseTimeRange}; the minimum
+ * here is only a defensive fallback for direct callers.
+ */
 export function relativeDaysAfter(after: string, now: Date = new Date()): number {
   const normalized = normalizeAbsoluteDate(after)
   if (normalized === undefined) return 1
