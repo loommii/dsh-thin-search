@@ -1,7 +1,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ENGINE_IDS, normalizeEngineId } from '../search/engines/types'
 import { parseTimeRange, type TimeRange } from '../search/time-range'
-import type { PipelineRequest } from '../search/pipeline'
+import { clampMaxResults, type PipelineRequest } from '../search/pipeline'
 import { escapeMarkdownLabel, escapeMarkdownText, renderSourceLine } from './markdown'
 import type { ToolHostDeps } from './types'
 
@@ -92,7 +92,7 @@ export function createAdvancedSearchTool(deps: ToolHostDeps) {
       }
       const request: PipelineRequest = {
         query,
-        maxResults: Math.min(Math.max(Math.trunc(args.maxResults ?? 5), 1), 10),
+        maxResults: clampMaxResults(args.maxResults),
         ...timeRange === undefined ? {} : { timeRange },
         ...engine === undefined ? {} : { engine },
       }

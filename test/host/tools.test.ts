@@ -221,6 +221,40 @@ describe('host tool contracts', () => {
     expect(description).toContain('supports time filtering')
   })
 
+  it('routes both tools through the shared maxResults clamp', async () => {
+    let advancedMax: number | undefined
+    let platformMax: number | undefined
+    const tools = buildTools(
+      fakePipeline({
+        search: async (request) => {
+          advancedMax = request.maxResults
+          return {
+            sources: sources('https://example.com/clamped'),
+            truncated: false,
+            engine: 'bing',
+            cached: false,
+          }
+        },
+      }),
+      {
+        search: async (_platform, _query, maxResults) => {
+          platformMax = maxResults
+          return sources('https://github.com/a/b')
+        },
+      },
+    )
+    await byName(tools, 'advanced_search').execute(
+      { query: 'q', maxResults: 100 },
+      toolExec(new AbortController().signal) as never,
+    )
+    await byName(tools, 'platform_search').execute(
+      { platform: 'github', query: 'q', maxResults: 0 },
+      toolExec(new AbortController().signal) as never,
+    )
+    expect(advancedMax).toBe(10)
+    expect(platformMax).toBe(1)
+  })
+
   it('returns canonical advanced_search output', async () => {
     const tool = byName(buildTools(), 'advanced_search')
     const value = await tool.execute({ query: 'q', timeRange: 'week', engine: 'bing', maxResults: 50 }, toolExec(new AbortController().signal) as never) as {

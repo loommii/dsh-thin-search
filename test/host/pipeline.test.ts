@@ -71,8 +71,10 @@ describe('engine chain', () => {
 
   it('clamps result counts and builds stable cache keys', () => {
     expect(clampMaxResults(undefined)).toBe(5)
+    expect(clampMaxResults(Number.NaN)).toBe(5)
     expect(clampMaxResults(0)).toBe(1)
     expect(clampMaxResults(99)).toBe(10)
+    expect(clampMaxResults(100)).toBe(10)
     expect(clampMaxResults(4.8)).toBe(4)
     const config = testConfig()
     expect(buildCacheKey(' Query ', 5, { days: 7 }, 'bing', config))
