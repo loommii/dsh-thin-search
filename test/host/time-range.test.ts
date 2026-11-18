@@ -30,10 +30,13 @@ describe('time-range parser', () => {
   })
 
   it('parses and validates absolute dates', () => {
-    expect(parseTimeRange('2026-07-01')).toEqual({ after: '2026-07-01' })
-    expect(parseTimeRange('2026-02-31')).toBeUndefined()
-    expect(parseTimeRange('2026-13-01')).toBeUndefined()
-    expect(parseTimeRange('01-07-2026')).toBeUndefined()
+    expect(parseTimeRange('2026-07-01', NOW)).toEqual({ after: '2026-07-01' })
+    expect(parseTimeRange('2026-07-10', NOW)).toEqual({ after: '2026-07-10' })
+    expect(parseTimeRange('2026-07-11', NOW)).toBeUndefined()
+    expect(parseTimeRange('2027-01-01', NOW)).toBeUndefined()
+    expect(parseTimeRange('2026-02-31', NOW)).toBeUndefined()
+    expect(parseTimeRange('2026-13-01', NOW)).toBeUndefined()
+    expect(parseTimeRange('01-07-2026', NOW)).toBeUndefined()
   })
 
   it('rejects empty, zero, negative and unknown values', () => {
@@ -47,9 +50,10 @@ describe('time-range parser', () => {
     expect(parseTimeRange({ after: 'nope' })).toBeUndefined()
   })
 
-  it('accepts already parsed objects', () => {
-    expect(parseTimeRange({ days: 4 })).toEqual({ days: 4 })
-    expect(parseTimeRange({ after: '2026-07-01' })).toEqual({ after: '2026-07-01' })
+  it('accepts already parsed objects and rejects future object dates', () => {
+    expect(parseTimeRange({ days: 4 }, NOW)).toEqual({ days: 4 })
+    expect(parseTimeRange({ after: '2026-07-01' }, NOW)).toEqual({ after: '2026-07-01' })
+    expect(parseTimeRange({ after: '2027-01-01' }, NOW)).toBeUndefined()
   })
 
   it('maps days to the nearest native tier', () => {
