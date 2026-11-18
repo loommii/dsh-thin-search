@@ -4,27 +4,53 @@ import { extractDdgUrl, normalizeSources } from '../normalize'
 import { ddgDateFilter, normalizePublishedDate, timeRangeTier } from '../time-range'
 import type { EngineContext, SearchEngine } from './types'
 
-/** Parse DuckDuckGo Lite's table-based result page. */
+/**
+ * Parse DuckDuckGo Lite's table-based result page. Rows are walked in document
+ * order: a result-link row starts a result, and the snippet/timestamp cells that
+ * follow belong to that result until the next result-link row. Parallel
+ * querySelectorAll arrays are deliberately not used, because a missing timestamp
+ * in one result would shift every later date onto the wrong result.
+ */
 export function parseDdgLiteHtml(html: string, limit: number): WebSearchSource[] {
   const root = parse(html)
-  const links = root.querySelectorAll('a.result-link')
-  const snippets = root.querySelectorAll('td.result-snippet')
-  const timestamps = root.querySelectorAll('.result-timestamp')
-  const sources: WebSearchSource[] = []
-  links.forEach((link, index) => {
-    const url = extractDdgUrl(link.getAttribute('href'))
-    if (url === undefined) return
-    const title = link.text.trim()
-    const snippet = snippets[index]?.text
-    const publishedAt = normalizePublishedDate(timestamps[index]?.text)
-    sources.push({
-      url,
-      ...(title.length === 0 ? {} : { title }),
-      ...(snippet === undefined ? {} : { snippet }),
-      ...(publishedAt === undefined ? {} : { publishedAt }),
-    })
-  })
-  return normalizeSources(sources, limit)
+  interface DraftSource {
+    url: string
+    title: string
+    snippet?: string
+    publishedAt?: string
+  }
+  const drafts: DraftSource[] = []
+  let current: DraftSource | undefined
+  const flush = (): void => {
+    if (current !== undefined) drafts.push(current)
+    current = undefined
+  }
+
+  for (const row of root.querySelectorAll('tr')) {
+    const link = row.querySelector('a.result-link')
+    if (link !== null) {
+      flush()
+      const url = extractDdgUrl(link.getAttribute('href'))
+      if (url !== undefined) current = { url, title: link.text.trim() }
+    }
+    if (current === undefined) continue
+    if (current.snippet === undefined) {
+      const snippet = row.querySelector('td.result-snippet')
+      if (snippet !== null) current.snippet = snippet.text
+    }
+    if (current.publishedAt === undefined) {
+      const publishedAt = normalizePublishedDate(row.querySelector('.result-timestamp')?.text)
+      if (publishedAt !== undefined) current.publishedAt = publishedAt
+    }
+  }
+  flush()
+
+  return normalizeSources(drafts.map(draft => ({
+    url: draft.url,
+    ...(draft.title.length === 0 ? {} : { title: draft.title }),
+    ...(draft.snippet === undefined ? {} : { snippet: draft.snippet }),
+    ...(draft.publishedAt === undefined ? {} : { publishedAt: draft.publishedAt }),
+  })), limit)
 }
 
 /** DuckDuckGo Lite endpoint. */
