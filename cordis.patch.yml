@@ -1,26 +1,17 @@
-# dsh-thin-search — free web search providers (no API key, no model calls)
-# Registers the thin-search profile entry, its plugin-manager configuration
-# page (Plugins > dsh-thin-search > Configure), and a loopback settings bridge.
-# DSH 0.1.7 persists user changes in the active profile's cordis.patch.yml. The
-# engine (bing / ddg / ddg-lite / searxng / anysearch) is chosen from that page
-# or by editing this entry's config:
-#   id: thin-search
-#   config:
-#     provider: bing
-#     bingMarket: zh-CN
-#     region: cn-zh
-# Failed/empty engines automatically fall back to the next free engine.
-# web.searchProvider must point at this plugin's provider id (thin-search).
+# dsh-thin-search v1.0.0 — free web search (no API key, no model tokens by default)
+#
+# This bundle inserts the Thin Search plugin row and points the web capability
+# seam at its provider. The web row is a replacement patch: only the two
+# volatile provider fields are set here, and fetchProvider keeps the built-in
+# HTTP fetch provider registered. Provider switching after mount is done by the
+# Client through ConfigForms.get('web').set('searchProvider', id); this file is
+# the first-boot default, not a profile rewrite.
 - insert:
     - id: thin-search
       name: dsh-thin-search
       config:
         provider: bing
         bingMarket: zh-CN
-# Take over the default search so the harness web_search tool uses this
-# plugin's provider (which internally contains all free engines).
-# Patch semantics replace the whole web config: keep fetchProvider so the
-# official web-fetch-http provider registration is preserved.
 - id: web
   config:
     searchProvider: thin-search

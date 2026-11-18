@@ -1,0 +1,8 @@
+{
+  "query": "test",
+  "results": [
+    { "url": "https://example.com/one", "title": "One", "content": "First result", "publishedDate": "2026-07-01T00:00:00Z" },
+    { "url": "ftp://example.com/not-http", "title": "Bad scheme", "content": "dropped" },
+    { "url": "https://example.com/two", "title": "Two", "content": "Second result" }
+  ]
+}

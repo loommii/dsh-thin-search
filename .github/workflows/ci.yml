@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - release/v1.0.0
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Node 24.9 verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24.9
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.9.0'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build from source before tests
+        run: npm run build
+
+      - name: Typecheck, test and build
+        run: npm run check
+
+      - name: Fail on committed-lib drift
+        run: |
+          git status --porcelain -- lib
+          test -z "$(git status --porcelain -- lib)"
+          git diff --exit-code -- lib
+
+      - name: Verify the published package contents
+        run: npm pack --dry-run

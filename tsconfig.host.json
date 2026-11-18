@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": [
+    "src/index.ts",
+    "src/config.ts",
+    "src/search/**/*.ts",
+    "src/enhance/**/*.ts",
+    "src/platforms/**/*.ts",
+    "src/tools/**/*.ts",
+    "test/host/**/*.ts",
+    "test/integration/**/*.ts",
+    "scripts/**/*.d.ts",
+    "tsdown.host.config.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": ["src/client/**", "test/client/**", "lib", "node_modules"]
+}

@@ -1,0 +1,10 @@
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "results": [
+      { "url": "https://example.com/any", "title": "Any result", "snippet": "Any snippet" },
+      { "url": "mailto:test@example.com", "title": "Bad", "snippet": "dropped" }
+    ]
+  }
+}
