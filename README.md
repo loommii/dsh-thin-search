@@ -166,9 +166,11 @@ Prompt text never enters `cordis.patch.yml`. Use a plugin data file such as
 | `advanced_search` | 60 s | Web search with `timeRange` and an optional preferred engine. |
 
 All three forward `exec.signal` into the HTTP client, so cancellation aborts the
-in-flight request. Every tool rejects with a `WebError`, so the tool result keeps
-an error code: cancellation is `WEB_ABORTED` and any other failure is
-`WEB_PROVIDER_ERROR` with the original error attached as `cause`. Output renders as text
+in-flight request. Every failure a tool throws is a `WebError`, so the tool result
+keeps an error code: an invalid argument is `WEB_INVALID_REQUEST`, cancellation is
+`WEB_ABORTED`, and an upstream failure is `WEB_PROVIDER_ERROR` with the original
+error attached as `cause`. Per-engine failures are data, not errors:
+`free_search_test` reports them in its result instead of throwing. Output renders as text
 content blocks, not bare strings, and escapes untrusted title, snippet and URL
 text before composing Markdown.
 
@@ -184,9 +186,10 @@ results.
 
 Time input accepts `day` / `week` / `month` / `year`, relative durations
 such as `12h`, `3d`, `2mo` or `1y`, and absolute dates such as
-`2026-07-01`. Absolute dates are converted to days from today, then mapped
-to the nearest fixed tier for the time-capable engines. A date in the future is
-rejected as invalid instead of being clamped to the last day, and an unknown
+`2026-07-01`. Absolute dates are read as a local calendar day, converted to days
+from today, then mapped to the nearest fixed tier for the time-capable engines. A
+date after the local today is rejected as invalid instead of being clamped to the
+last day, and an unknown
 `engine` value is an error rather than a silently ignored hint.
 
 Network errors, request timeouts and 5xx responses retry once. HTTP 202, 403 and real
