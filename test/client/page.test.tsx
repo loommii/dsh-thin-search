@@ -15,6 +15,7 @@ async function setup(options: {
   readonly providerAnswer?: 'error'
   readonly providerSource?: ProviderAnswer | (() => ProviderAnswer)
   readonly skipProviderLoad?: boolean
+  readonly webWritable?: boolean
   readonly locale?: string
 } = {}) {
   const context = createFakeContext({
@@ -31,6 +32,7 @@ async function setup(options: {
           : { providers: { kind: 'list', providers: options.providers } as const }),
     ...(options.locale === undefined ? {} : { locale: options.locale }),
   })
+  if (options.webWritable === false) context.forms.get('web')?.setSnapshot({ writable: false })
   const thin = context.forms.get('thin-search')
   if (thin === undefined) throw new Error('missing thin-search form double')
   const runtime = new ThinSearchRuntime(context)
@@ -182,6 +184,13 @@ describe('Thin Search bundle settings card', () => {
     runtime.ensureProviders()
     const html = render()
     expect(html).toMatch(/data-control="provider"[^>]*disabled/u)
+  })
+
+  it('disables the provider select when the web namespace is not writable', async () => {
+    const { render } = await setup({ webWritable: false })
+    const html = render()
+    expect(html).toMatch(/data-control="provider"[^>]*disabled/u)
+    expect(html).toContain('data-control="provider"')
   })
 
   it('never renders a raw dictionary key', async () => {
