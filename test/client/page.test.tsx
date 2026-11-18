@@ -5,7 +5,7 @@ import { ThinSearchBundleConfig } from '../../src/client/page'
 import { ThinSearchRuntime } from '../../src/client/runtime'
 import { STYLES } from '../../src/client/styles'
 import type { ConfigForm, WebProviderInfo } from '../../src/client/types'
-import { createFakeContext } from './helpers'
+import { createFakeContext, type ProviderAnswer } from './helpers'
 
 /** Build one rendered bundle card and the context behind it. */
 async function setup(options: {
@@ -13,6 +13,8 @@ async function setup(options: {
   readonly web?: Record<string, unknown>
   readonly providers?: readonly WebProviderInfo[]
   readonly providerAnswer?: 'error'
+  readonly providerSource?: ProviderAnswer | (() => ProviderAnswer)
+  readonly skipProviderLoad?: boolean
   readonly locale?: string
 } = {}) {
   const context = createFakeContext({
@@ -20,18 +22,20 @@ async function setup(options: {
       'thin-search': options.values ?? { ...DEFAULT_DRAFT, platforms: [...PLATFORM_IDS] },
       web: options.web ?? { searchProvider: 'thin-search' },
     },
-    ...(options.providerAnswer === 'error'
-      ? { providers: { kind: 'error' } as const }
-      : options.providers === undefined
-        ? {}
-        : { providers: { kind: 'list', providers: options.providers } as const }),
+    ...(options.providerSource !== undefined
+      ? { providers: options.providerSource }
+      : options.providerAnswer === 'error'
+        ? { providers: { kind: 'error' } as const }
+        : options.providers === undefined
+          ? {}
+          : { providers: { kind: 'list', providers: options.providers } as const }),
     ...(options.locale === undefined ? {} : { locale: options.locale }),
   })
   const thin = context.forms.get('thin-search')
   if (thin === undefined) throw new Error('missing thin-search form double')
   const runtime = new ThinSearchRuntime(context)
   const detach = runtime.attach(thin.form as unknown as ConfigForm<ThinSearchValues>)
-  await runtime.refreshProviders()
+  if (options.skipProviderLoad !== true) await runtime.refreshProviders()
   const render = (): string => renderToStaticMarkup(<ThinSearchBundleConfig runtime={runtime} />)
   return { context, thin, runtime, detach, render }
 }
@@ -151,6 +155,33 @@ describe('Thin Search bundle settings card', () => {
     expect(html).toContain('role="alert"')
     expect(html).toContain('Could not load the registered providers.')
     expect(html).toContain('data-control="provider-retry"')
+  })
+
+  it('keeps the provider select interactive when a refresh fails after a good list', async () => {
+    let reads = 0
+    const { runtime, render } = await setup({
+      providerSource: () => {
+        reads += 1
+        return reads === 1
+          ? { kind: 'list', providers: [{ id: 'thin-search', title: 'Thin Search' }] }
+          : { kind: 'error' }
+      },
+    })
+    await runtime.refreshProviders()
+    const html = render()
+    expect(html).toContain('Could not load the registered providers.')
+    expect(html).toContain('data-control="provider-retry"')
+    expect(html).not.toMatch(/data-control="provider"[^>]*disabled/u)
+  })
+
+  it('disables the provider select while loading an empty list', async () => {
+    const { runtime, render } = await setup({
+      skipProviderLoad: true,
+      providerSource: () => ({ kind: 'list', providers: [{ id: 'thin-search', title: 'Thin Search' }] }),
+    })
+    runtime.ensureProviders()
+    const html = render()
+    expect(html).toMatch(/data-control="provider"[^>]*disabled/u)
   })
 
   it('never renders a raw dictionary key', async () => {

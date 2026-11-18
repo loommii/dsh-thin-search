@@ -266,7 +266,7 @@ function ProviderGroup({ runtime, webState, providers, error, onPick, onRetry }:
               value={selected}
               options={options}
               placeholder={t('provider.none')}
-              disabled={webState.status !== 'ready' || !webState.writable || loading || providers.status === 'error'}
+              disabled={webState.status !== 'ready' || !webState.writable || loading}
               describedBy={describedBy}
               onChange={onPick}
             />
