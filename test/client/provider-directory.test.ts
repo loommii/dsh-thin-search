@@ -73,6 +73,35 @@ describe('ProviderDirectory', () => {
     expect(directory.getSnapshot()).toEqual({ status: 'ready', providers: [provider('new')] })
   })
 
+  it('drains a request arriving during the rerun into a third read', async () => {
+    const resolvers: ((value: RemoteResult<WebProviderList>) => void)[] = []
+    let reads = 0
+    const web: RemoteWebService & { readonly reads: number } = {
+      get reads() { return reads },
+      listProviders: () => {
+        reads += 1
+        return new Promise((resolve) => { resolvers.push(resolve) })
+      },
+    }
+    const directory = new ProviderDirectory(web)
+    const first = directory.refresh()
+    void directory.refresh()
+    expect(web.reads).toBe(1)
+    resolvers[0]?.({ ok: true, value: { search: [provider('first')], fetch: [] } })
+    await flushMicrotasks()
+    expect(web.reads).toBe(2)
+    void directory.refresh()
+    expect(web.reads).toBe(2)
+    resolvers[1]?.({ ok: true, value: { search: [provider('second')], fetch: [] } })
+    await flushMicrotasks()
+    expect(web.reads).toBe(3)
+    resolvers[2]?.({ ok: true, value: { search: [provider('third')], fetch: [] } })
+    await first
+    await flushMicrotasks()
+    expect(web.reads).toBe(3)
+    expect(directory.getSnapshot()).toEqual({ status: 'ready', providers: [provider('third')] })
+  })
+
   it('does not rerun after disposal', async () => {
     let resolveFirst!: (value: RemoteResult<WebProviderList>) => void
     let reads = 0
