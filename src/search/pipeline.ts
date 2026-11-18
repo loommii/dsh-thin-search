@@ -6,7 +6,6 @@ import { cacheTtlMs, type ResolvedConfig } from '../config'
 import { ResultCache } from './cache'
 import { ENGINES, createEngineMap } from './engines'
 import type { EngineContext, EngineId, SearchEngine } from './engines/types'
-import { supportsTimeRange } from './engines/types'
 import type { HttpClient, LoggerLike } from './http'
 import { joinNotes, normalizeSources } from './normalize'
 import { parseTimeRange, timeRangeLabel, timeRangeKey, type TimeRange } from './time-range'
@@ -156,25 +155,25 @@ export function buildCacheKey(
 export function buildEngineChain(
   preferred: EngineId,
   timeRange: TimeRange | undefined,
-  available: readonly EngineId[],
+  available: readonly SearchEngine[],
 ): EngineId[] {
-  const present = new Set(available)
-  if (!present.has(preferred)) {
-    if (timeRange === undefined) return [...available]
+  const preferredEngine = available.find(engine => engine.id === preferred)
+  if (preferredEngine === undefined) {
+    if (timeRange === undefined) return available.map(engine => engine.id)
     return [
-      ...available.filter(supportsTimeRange),
-      ...available.filter(id => !supportsTimeRange(id)),
+      ...available.filter(engine => engine.supportsTimeRange).map(engine => engine.id),
+      ...available.filter(engine => !engine.supportsTimeRange).map(engine => engine.id),
     ]
   }
   if (timeRange === undefined) {
-    return [preferred, ...available.filter(id => id !== preferred)]
+    return [preferred, ...available.filter(engine => engine.id !== preferred).map(engine => engine.id)]
   }
-  const timeCapable = available.filter(supportsTimeRange)
-  const others = available.filter(id => !supportsTimeRange(id))
   return [
-    ...supportsTimeRange(preferred) ? [preferred] : [],
-    ...timeCapable.filter(id => id !== preferred),
-    ...others,
+    ...preferredEngine.supportsTimeRange ? [preferred] : [],
+    ...available
+      .filter(engine => engine.id !== preferred && engine.supportsTimeRange)
+      .map(engine => engine.id),
+    ...available.filter(engine => !engine.supportsTimeRange).map(engine => engine.id),
   ]
 }
 
@@ -218,7 +217,7 @@ function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> 
 /** The provider pipeline: cache → optional enhancement → engine fallback → cache store. */
 export class SearchPipeline {
   private readonly engines: ReadonlyMap<EngineId, SearchEngine>
-  private readonly engineOrder: readonly EngineId[]
+  private readonly engineList: readonly SearchEngine[]
   private readonly cache: ResultCache<PipelineResult>
   private readonly enhance: EnhanceFunction | undefined
   private readonly logger: LoggerLike | undefined
@@ -227,8 +226,8 @@ export class SearchPipeline {
   private readonly engineTimeoutMs: number
 
   constructor(private readonly options: SearchPipelineOptions) {
-    this.engines = createEngineMap(options.engines ?? ENGINES)
-    this.engineOrder = [...this.engines.keys()]
+    this.engineList = options.engines ?? ENGINES
+    this.engines = createEngineMap(this.engineList)
     this.cache = options.cache ?? new ResultCache<PipelineResult>()
     this.enhance = options.enhance
     this.logger = options.logger
@@ -300,7 +299,7 @@ export class SearchPipeline {
       }
     }
 
-    const chain = buildEngineChain(preferredId, timeRange, this.engineOrder)
+    const chain = buildEngineChain(preferredId, timeRange, this.engineList)
     const startedAt = this.now()
     const totalDeadline = startedAt + this.totalBudgetMs
     const failures = new Map<EngineId, string>()
@@ -343,12 +342,13 @@ export class SearchPipeline {
           failures.set(engineId, lastError)
           continue
         }
+        const preferredEngine = this.engines.get(preferredId)
         const preferredFailure = engineId === preferredId
           ? undefined
-          : failures.get(preferredId) ?? (timeRange !== undefined && !supportsTimeRange(preferredId)
+          : failures.get(preferredId) ?? (timeRange !== undefined && preferredEngine !== undefined && !preferredEngine.supportsTimeRange
             ? `does not support time filtering (${timeRangeLabel(timeRange)})`
             : 'unavailable')
-        const timeFilterNote = timeRange !== undefined && !supportsTimeRange(engineId)
+        const timeFilterNote = timeRange !== undefined && !engine.supportsTimeRange
           ? `Note: ${engineId} does not support time filtering (${timeRangeLabel(timeRange)}); results are not time-filtered.`
           : undefined
         const content = joinNotes([

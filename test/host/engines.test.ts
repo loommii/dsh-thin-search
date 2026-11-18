@@ -6,7 +6,7 @@ import { bingEngine, parseBingHtml } from '../../src/search/engines/bing'
 import { ddgEngine, parseDdgHtml } from '../../src/search/engines/ddg'
 import { ddgLiteEngine, parseDdgLiteHtml } from '../../src/search/engines/ddg-lite'
 import { DEFAULT_SEARXNG_INSTANCES, parseSearxngJson, searxngEngine } from '../../src/search/engines/searxng'
-import { ENGINE_IDS, supportsTimeRange } from '../../src/search/engines/types'
+import { ENGINE_IDS } from '../../src/search/engines/types'
 import { engineContext, routingHttp, testConfig, textHttp } from './helpers'
 
 function fixture(name: string): string {
@@ -134,10 +134,11 @@ describe('engine requests', () => {
 
   it('declares the five engines and time-filter capability', () => {
     expect(ENGINE_IDS).toEqual(['bing', 'anysearch', 'searxng', 'ddg', 'ddg-lite'])
-    expect(supportsTimeRange('searxng')).toBe(true)
-    expect(supportsTimeRange('ddg')).toBe(true)
-    expect(supportsTimeRange('ddg-lite')).toBe(true)
-    expect(supportsTimeRange('bing')).toBe(false)
+    expect(searxngEngine.supportsTimeRange).toBe(true)
+    expect(ddgEngine.supportsTimeRange).toBe(true)
+    expect(ddgLiteEngine.supportsTimeRange).toBe(true)
+    expect(bingEngine.supportsTimeRange).toBe(false)
+    expect(anysearchEngine.supportsTimeRange).toBe(false)
     expect(DEFAULT_SEARXNG_INSTANCES.length).toBeGreaterThan(0)
   })
 

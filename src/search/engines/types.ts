@@ -46,8 +46,3 @@ export function normalizeEngineId(value: unknown): EngineId | undefined {
   const normalized = value.trim().toLowerCase()
   return (ENGINE_IDS as readonly string[]).includes(normalized) ? normalized as EngineId : undefined
 }
-
-/** Whether an engine id has native time filtering. */
-export function supportsTimeRange(id: EngineId): boolean {
-  return id === 'searxng' || id === 'ddg' || id === 'ddg-lite'
-}

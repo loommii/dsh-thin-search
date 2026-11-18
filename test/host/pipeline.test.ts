@@ -9,7 +9,7 @@ import {
   MIN_ENGINE_BUDGET_MS,
   SearchPipeline,
 } from '../../src/search/pipeline'
-import { ENGINE_IDS } from '../../src/search/engines/types'
+import { ENGINES } from '../../src/search/engines'
 import { fakeEngine, sources, testConfig, textHttp } from './helpers'
 
 /** Simulate the sequential allocation of one total budget across a chain. */
@@ -26,12 +26,12 @@ function budgetSequence(totalBudgetMs: number, chainLength: number, engineTimeou
 
 describe('engine chain', () => {
   it('keeps the preferred engine first without a time window', () => {
-    expect(buildEngineChain('searxng', undefined, ENGINE_IDS)).toEqual(['searxng', 'bing', 'anysearch', 'ddg', 'ddg-lite'])
+    expect(buildEngineChain('searxng', undefined, ENGINES)).toEqual(['searxng', 'bing', 'anysearch', 'ddg', 'ddg-lite'])
   })
 
   it('moves time-capable engines to the front when filtering', () => {
-    expect(buildEngineChain('bing', { days: 7 }, ENGINE_IDS)).toEqual(['searxng', 'ddg', 'ddg-lite', 'bing', 'anysearch'])
-    expect(buildEngineChain('ddg', { days: 7 }, ENGINE_IDS)).toEqual(['ddg', 'searxng', 'ddg-lite', 'bing', 'anysearch'])
+    expect(buildEngineChain('bing', { days: 7 }, ENGINES)).toEqual(['searxng', 'ddg', 'ddg-lite', 'bing', 'anysearch'])
+    expect(buildEngineChain('ddg', { days: 7 }, ENGINES)).toEqual(['ddg', 'searxng', 'ddg-lite', 'bing', 'anysearch'])
   })
 
   it('splits the remaining budget fairly across the engines still to try', () => {
