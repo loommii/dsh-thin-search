@@ -50,6 +50,23 @@ describe('engine HTML fixtures', () => {
     expect(sources[0]?.publishedAt).toBeUndefined()
   })
 
+  it('does not borrow a later timestamp when the first DDG Lite result has none', () => {
+    const sources = parseDdgLiteHtml(fixture('ddg-lite-missing-first.html'), 10)
+    expect(sources).toHaveLength(2)
+    expect(sources[0]).toMatchObject({ title: 'First result', snippet: 'First snippet' })
+    expect(sources[0]?.publishedAt).toBeUndefined()
+    expect(sources[1]).toMatchObject({ title: 'Second result', snippet: 'Second snippet', publishedAt: '2026-07-02' })
+  })
+
+  it('keeps snippets and timestamps aligned when a middle DDG Lite result has no timestamp', () => {
+    const sources = parseDdgLiteHtml(fixture('ddg-lite-missing-middle.html'), 10)
+    expect(sources).toHaveLength(3)
+    expect(sources[0]).toMatchObject({ title: 'Result one', snippet: 'Snippet one', publishedAt: '2026-07-01' })
+    expect(sources[1]).toMatchObject({ title: 'Result two', snippet: 'Snippet two' })
+    expect(sources[1]?.publishedAt).toBeUndefined()
+    expect(sources[2]).toMatchObject({ title: 'Result three', snippet: 'Snippet three', publishedAt: '2026-07-03' })
+  })
+
   it('parses SearXNG JSON and filters unsupported schemes', () => {
     const sources = parseSearxngJson(JSON.parse(fixture('searxng.json')), 10)
     expect(sources).toHaveLength(2)
