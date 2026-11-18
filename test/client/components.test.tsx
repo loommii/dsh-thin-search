@@ -152,24 +152,46 @@ describe('PillSelect focus and keyboard behavior', () => {
       expect(b).toBeDefined()
       if (a === undefined || b === undefined) return
 
+      const expectFocus = (expected: MockNode, unexpected: MockNode): void => {
+        expect(expected.focus).toHaveBeenCalledTimes(1)
+        expect(unexpected.focus).not.toHaveBeenCalled()
+      }
+
+      a.focus.mockClear()
+      b.focus.mockClear()
       dom.document.activeElement = a
       await act(async () => { menu.props.onKeyDown({ key: 'ArrowDown', preventDefault: vi.fn() }) })
-      expect(b.focus).toHaveBeenCalled()
+      expectFocus(b, a)
 
+      a.focus.mockClear()
+      b.focus.mockClear()
       dom.document.activeElement = b
       await act(async () => { menu.props.onKeyDown({ key: 'ArrowUp', preventDefault: vi.fn() }) })
-      expect(a.focus).toHaveBeenCalled()
+      expectFocus(a, b)
 
+      a.focus.mockClear()
+      b.focus.mockClear()
       dom.document.activeElement = b
       await act(async () => { menu.props.onKeyDown({ key: 'Home', preventDefault: vi.fn() }) })
-      expect(a.focus).toHaveBeenCalled()
+      expectFocus(a, b)
 
+      a.focus.mockClear()
+      b.focus.mockClear()
       dom.document.activeElement = a
       await act(async () => { menu.props.onKeyDown({ key: 'End', preventDefault: vi.fn() }) })
-      expect(b.focus).toHaveBeenCalled()
+      expectFocus(b, a)
       expect(renderer.root.findAllByProps({ role: 'menu' })).toHaveLength(1)
     } finally {
       dom.restore()
+    }
+  })
+
+  it('opens the menu from the trigger with ArrowDown or ArrowUp', async () => {
+    for (const key of ['ArrowDown', 'ArrowUp']) {
+      const { renderer } = await mountWithNodes()
+      const trigger = renderer.root.findByProps({ 'data-control': 'pill' })
+      await act(async () => { trigger.props.onKeyDown({ key, preventDefault: vi.fn() }) })
+      expect(renderer.root.findAllByProps({ role: 'menu' })).toHaveLength(1)
     }
   })
 
