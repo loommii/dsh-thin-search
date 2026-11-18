@@ -65,6 +65,14 @@ describe('ThinSearchRuntime', () => {
     expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath).toBeUndefined()
   })
 
+  it('keeps a field validation error when the Host refuses that field write', async () => {
+    const { runtime } = attached({ accept: false })
+    await expect(runtime.writeSetting('enhanceSystemPromptPath', 'prompt.md')).resolves.toBe(false)
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath?.key).toBe('validation.enhanceSystemPromptPath')
+    await expect(runtime.writeSetting('enhanceSystemPromptPath', '/tmp/prompt.md')).resolves.toBe(false)
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath?.key).toBe('validation.enhanceSystemPromptPath')
+  })
+
   it('reports a Host refusal and restores the accepted values', async () => {
     const { runtime } = attached({ accept: false })
     await expect(runtime.writeSetting('provider', 'ddg')).resolves.toBe(false)

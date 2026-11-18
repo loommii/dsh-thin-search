@@ -160,15 +160,24 @@ export class ThinSearchRuntime implements EngineCommandSource {
     }
     const optimistic = { ...this.snapshot.values }
     optimistic[field] = value
-    const errors = { ...this.snapshot.errors }
-    delete errors[field]
     this.pending.add(field)
-    this.publish({ ...this.snapshot, values: optimistic, errors, writeFailed: false })
+    this.publish({ ...this.snapshot, values: optimistic, writeFailed: false })
     const write = settingWrite(field, value)
+    const clearError = (): Partial<Record<keyof Draft, DraftError>> | undefined => {
+      if (this.snapshot.errors[field] === undefined) return undefined
+      const errors = { ...this.snapshot.errors }
+      delete errors[field]
+      return errors
+    }
     try {
       const accepted = await form.set(write.field, write.value)
       this.pending.delete(field)
-      if (this.form === form) this.sync(form.getSnapshot(), accepted ? {} : { writeFailed: true })
+      const errors = accepted ? clearError() : undefined
+      if (this.form === form) {
+        this.sync(form.getSnapshot(), accepted
+          ? errors === undefined ? {} : { errors }
+          : { writeFailed: true })
+      }
       return accepted
     } catch {
       this.pending.delete(field)
