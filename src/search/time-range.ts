@@ -113,21 +113,24 @@ export function parseTimeRange(input: unknown, now: Date = new Date()): TimeRang
 }
 
 /**
- * Days between an absolute date and {@code now}, rounded up and clamped to at
- * least one. Future dates are rejected by {@link parseTimeRange}; the minimum
- * here is only a defensive fallback for direct callers.
+ * Days between an absolute date and {@code now}'s local calendar day, rounded up
+ * and clamped to at least one. Both the input date and {@code now} are expanded
+ * with {@link Date.UTC} from local calendar components, so the count does not
+ * shift at UTC-day boundaries in non-UTC zones. Future dates are rejected by
+ * {@link parseTimeRange}; the minimum here is only a defensive fallback for
+ * direct callers.
  */
 export function relativeDaysAfter(after: string, now: Date = new Date()): number {
   const normalized = normalizeAbsoluteDate(after)
   if (normalized === undefined) return 1
   const [year, month, day] = normalized.split('-').map(Number) as [number, number, number]
   const target = Date.UTC(year, month - 1, day)
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
   const days = Math.ceil((today - target) / 86_400_000)
   return Number.isFinite(days) && days > 0 ? days : 1
 }
 
-/** Resolve a parsed window to days, converting absolute dates relative to {@code now}. */
+/** Resolve a parsed window to local-calendar days, converting absolute dates relative to {@code now}. */
 export function timeRangeDays(range: TimeRange, now: Date = new Date()): number {
   return 'days' in range ? range.days : relativeDaysAfter(range.after, now)
 }

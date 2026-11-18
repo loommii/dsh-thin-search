@@ -10,7 +10,16 @@ import {
   timeRangeTier,
 } from '../../src/search/time-range'
 
-const NOW = new Date('2026-07-10T12:00:00.000Z')
+// Local construction keeps every absolute-date expectation stable in any TZ.
+const NOW = new Date(2026, 6, 10, 12, 0, 0)
+
+/** Derive a local YYYY-MM-DD date {@code days} before now, using local calendar math. */
+function localDateDaysBefore(now: Date, days: number): string {
+  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0)
+  date.setDate(date.getDate() - days)
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
 
 describe('time-range parser', () => {
   it('parses fixed tiers', () => {
@@ -82,6 +91,29 @@ describe('time-range parser', () => {
     expect(timeRangeTier({ after: '2026-07-09' }, NOW)).toBe('day')
     expect(ddgDateFilter('week')).toBe('w')
     expect(timeRangeDays({ after: '2026-06-01' }, NOW)).toBe(39)
+  })
+
+  it('uses local calendar days for the 14/15 and 90/91-day tier edges', () => {
+    const localNow = new Date(2026, 10, 19, 1, 0, 0)
+    const days14 = localDateDaysBefore(localNow, 14)
+    const days15 = localDateDaysBefore(localNow, 15)
+    const days90 = localDateDaysBefore(localNow, 90)
+    const days91 = localDateDaysBefore(localNow, 91)
+
+    expect(relativeDaysAfter(days14, localNow)).toBe(14)
+    expect(timeRangeDays({ after: days14 }, localNow)).toBe(14)
+    expect(timeRangeTier({ after: days14 }, localNow)).toBe('week')
+
+    expect(relativeDaysAfter(days15, localNow)).toBe(15)
+    expect(timeRangeDays({ after: days15 }, localNow)).toBe(15)
+    expect(timeRangeTier({ after: days15 }, localNow)).toBe('month')
+
+    expect(relativeDaysAfter(days90, localNow)).toBe(90)
+    expect(timeRangeTier({ after: days90 }, localNow)).toBe('month')
+
+    expect(relativeDaysAfter(days91, localNow)).toBe(91)
+    expect(timeRangeDays({ after: days91 }, localNow)).toBe(91)
+    expect(timeRangeTier({ after: days91 }, localNow)).toBe('year')
   })
 
   it('renders stable cache keys and labels', () => {
