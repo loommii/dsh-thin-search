@@ -154,6 +154,49 @@ export function timeRangeLabel(range: TimeRange | undefined): string {
   return 'days' in range ? `${range.days}d` : `after ${range.after}`
 }
 
+const MONTH_NAMES: Readonly<Record<string, number>> = Object.freeze({
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+})
+
+function padDatePart(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+/**
+ * Normalize a search-result timestamp into {@code YYYY-MM-DD}. Only explicit,
+ * locale-independent formats are accepted: ISO/SQL dates, slash-separated
+ * numeric dates, and English month names. Unrecognized text returns undefined
+ * so callers omit the field instead of failing the parse.
+ */
+export function normalizePublishedDate(input: string | undefined): string | undefined {
+  if (input === undefined) return undefined
+  const text = input.trim().slice(0, 64)
+  if (text.length === 0) return undefined
+
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/u.exec(text)
+  if (iso !== null) {
+    return normalizeAbsoluteDate(`${iso[1]}-${padDatePart(Number(iso[2]))}-${padDatePart(Number(iso[3]))}`)
+  }
+  const slash = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/u.exec(text)
+  if (slash !== null) {
+    return normalizeAbsoluteDate(`${slash[1]}-${padDatePart(Number(slash[2]))}-${padDatePart(Number(slash[3]))}`)
+  }
+  const monthFirst = /^([A-Za-z]{3})[A-Za-z]*\.?\s+(\d{1,2}),?\s+(\d{4})$/u.exec(text)
+  if (monthFirst !== null) {
+    const month = MONTH_NAMES[monthFirst[1]!.toLowerCase()]
+    if (month === undefined) return undefined
+    return normalizeAbsoluteDate(`${monthFirst[3]}-${padDatePart(month)}-${padDatePart(Number(monthFirst[2]))}`)
+  }
+  const dayFirst = /^(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\.?\s+(\d{4})$/u.exec(text)
+  if (dayFirst !== null) {
+    const month = MONTH_NAMES[dayFirst[2]!.toLowerCase()]
+    if (month === undefined) return undefined
+    return normalizeAbsoluteDate(`${dayFirst[3]}-${padDatePart(month)}-${padDatePart(Number(dayFirst[1]))}`)
+  }
+  return undefined
+}
+
 /** DuckDuckGo {@code df} parameter for a tier. */
 export function ddgDateFilter(tier: TimeRangeTier | undefined): string | undefined {
   switch (tier) {

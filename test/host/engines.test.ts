@@ -24,16 +24,30 @@ describe('engine HTML fixtures', () => {
   it('parses DuckDuckGo HTML and decodes the uddg redirect', () => {
     const sources = parseDdgHtml(fixture('ddg.html'), 10)
     expect(sources).toHaveLength(2)
-    expect(sources[0]).toMatchObject({ url: 'https://example.com/page?a=1', title: 'Duck result one', snippet: 'Duck snippet one' })
+    expect(sources[0]).toMatchObject({
+      url: 'https://example.com/page?a=1',
+      title: 'Duck result one',
+      snippet: 'Duck snippet one',
+      publishedAt: '2026-07-01',
+    })
     expect(sources[1]?.url).toBe('https://example.org/two')
+    expect(sources[1]?.publishedAt).toBeUndefined()
   })
 
   it('parses DuckDuckGo Lite rows', () => {
     const sources = parseDdgLiteHtml(fixture('ddg-lite.html'), 10)
     expect(sources).toHaveLength(2)
-    expect(sources[0]).toMatchObject({ title: 'Lite result one', snippet: 'Lite snippet one' })
+    expect(sources[0]).toMatchObject({ title: 'Lite result one', snippet: 'Lite snippet one', publishedAt: '2026-07-02' })
     expect(sources[0]?.url).toBe('https://example.net/lite')
     expect(sources[1]?.snippet).toBe('Lite snippet two')
+    expect(sources[1]?.publishedAt).toBeUndefined()
+  })
+
+  it('omits unparseable DDG timestamps instead of failing', () => {
+    const html = '<div class="result"><a class="result__a" href="https://example.com/x">X</a><span class="result__timestamp">not a date</span></div>'
+    const sources = parseDdgHtml(html, 5)
+    expect(sources).toHaveLength(1)
+    expect(sources[0]?.publishedAt).toBeUndefined()
   })
 
   it('parses SearXNG JSON and filters unsupported schemes', () => {
