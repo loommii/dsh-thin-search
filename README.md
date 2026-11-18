@@ -1,7 +1,7 @@
 # dsh-thin-search
 
 [![node](https://img.shields.io/badge/node-%E2%89%A522.19-339933)](package.json)
-[![dsh](https://img.shields.io/badge/dsh-%E2%89%A50.1.7--rc.1-4c8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.1.7%E2%80%930.2.1-4c8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/dsh--plugin-blue)](https://github.com/deepseek-ai/deepseek-harness)
 
 **DeepSeek Harness 免费搜索插件 —— 零成本、零 API key、零模型调用。**
@@ -181,8 +181,15 @@ Search engine test:
 
 | 项目 | 要求 |
 |---|---|
-| DSH | `>= 0.1.7-rc.1`（依赖 `@deepseek-ai/dsh-atomic-write` / `dsh-settings` / `dsh-tools` / `dsh-web` / `dsh-llm` 均 `>= 0.1.7-rc.1`） |
+| DSH | `>= 0.1.7-rc.1 < 0.3.0-0`（即 0.1.7–0.2.x，含预发布；依赖 `@deepseek-ai/dsh-atomic-write` / `dsh-settings` / `dsh-tools` / `dsh-web` / `dsh-llm` 同区间）；已在 **0.1.7-rc.1 / 0.2.0-rc.2 / 0.2.1-rc.2** 实测 |
 | Node.js | `>= 22.19.0` |
+
+> **DSH 0.2.1 适配（v0.6.0）**：
+> - `dsh-web` 0.2.1 删除了 `WebRuntime.searchProviderId` 实例字段，改为每次搜索读 `config.searchProvider`（volatile 引用）。插件不再写该字段（写它只会生成无效自有属性），改为只读 `config.searchProvider.get()`，并在 `searchProvider` 未配置时输出一条可操作警告。
+> - **引擎模式切换**：0.2.1 起 `web.searchProvider` / `web.fetchProvider` 是 volatile 字段，插件直接走 `SettingsForms.mutate("web", …)` 改写官方 web entry —— 与官方「网页搜索设置」页共用同一份权威配置，切换**立即生效**且冲突可见；0.1.7–0.2.0 的 web 字段不是 volatile，自动回退到 profile patch 托管块（重启生效）。
+> - 官方 0.2.1-rc.2 新增的「网页搜索设置」开关（DeepSeek Search / Fetch API）会写同一个 `web.searchProvider`，两者以**最后保存者**为准；插件配置页会显示当前生效的 provider id。
+> - 若部署配置里显式写了 `tools: { mode: both }`，0.2.1 会拒绝（`both` 已移除）并导致 `tools` 服务不加载、本插件工具全部消失；请改为 `native` 或 `ptc`。
+> - devDependencies 已升至 `0.2.1-rc.2`，并移除上游已停产的 `@deepseek-ai/dsh-invariants`。
 
 > **DSH 0.1.7 适配**：0.1.7 移除了旧的 `SettingsProvider.installSection()`，改为从 Loader profile entry 投影 `.volatile()` 配置。本插件现使用 `thin-search` 条目、`SettingsForms.configure({ auto: false })` 和 `SettingsForms.mutate()`；自定义配置页从 `settings.section`（全局设置）迁到 `plugins.row.config`（插件管理页），`/thin-search-engine` 命令保持不变，设置保存到当前 profile 的 `cordis.patch.yml`。entry id 特意沿用旧 `settings.yaml` 的 `thin-search:` section 名，因此 DSH 0.1.7 首次启动时可自动导入旧配置。
 >
@@ -194,10 +201,16 @@ Search engine test:
 
 > **从 v0.1.x 升级**：dsh v0.1.2-alpha.2 对 settings seam 做了破坏性重构——`installSettingsSection` / `settingsNamespace` 被移除，改用 `SettingsProvider.installSection`（见 dsh-v0.1.2-alpha.2+）。插件 v0.2.0 起仅支持 dsh ≥ 0.1.2-alpha.2；仍在 dsh 0.1.1 的用户请使用插件 v0.1.1。
 
+### 配置存储
+
+- **插件业务配置**（引擎、缓存、平台、代理、搜索增强…）由 DSH 的 SettingsForms 写入当前 profile 的 `cordis.patch.yml` 中 `id: thin-search` 这一行 —— 这是 DSH 为每个插件保留的官方配置位，不是本插件私自改公用文件；插件页、`/thin-search-engine` 与桥接 API 的读写都走同一套 `settings.describe/mutate`（原子写 + 文件锁 + revision 冲突检测）。
+- 本插件**不另建配置文件**：脱离 SettingsForms 的私有 JSON/YAML 会失去插件页表单投影、`.volatile()` 热更新、profile 级作用域与旧 `settings.yaml` 迁移能力。
+- **搜索提供方（`web.searchProvider`）属于官方 `web` 行**：0.2.1 起经 `SettingsForms.mutate("web", …)` 改写（与官方「网页搜索设置」同一权威来源、立即生效）；0.1.7–0.2.0 才回退到带标记的托管块。若检测到 profile patch 里已有用户自己维护的 `- id: web` 行，插件**拒绝**追加重复行（重复 id 会与 ConfigEditor 按 id 定位、按层去重的逻辑打架，导致「保存后不生效」），并提示手动切换。
+
 ### 与官方插件的关系
 
 - 官方 `web-search-deepseek`（`deepseek-official`）与本插件可共存；`searchProvider` 指向谁就用谁
-- 本插件默认通过 patch 接管搜索（无需 key、零成本）；**插件配置页"搜索提供方"开关**一键切回官方（写 profile patch 的 `searchProvider: deepseek-official`，需重启 DSH 生效），也可手动改 `~/.dsh/profiles/<profile>/cordis.patch.yml`
+- 本插件默认通过 patch 接管搜索（无需 key、零成本）；**插件配置页"搜索提供方"开关**一键切回官方（DSH 0.2.1 起经 SettingsForms 写 `web.searchProvider`，立即生效；0.1.7–0.2.0 写 profile patch，需重启），也可手动改 `~/.dsh/profiles/<profile>/cordis.patch.yml`；官方「网页搜索设置」页与本插件改的是同一个键，以最后保存者为准
 - 本插件**不包含**任何模型调用逻辑，也不读取 `DEEPSEEK_API_KEY` —— 第三方网关用户可直接使用
 
 ### License
@@ -250,11 +263,17 @@ Restart `dsh web` afterwards to restore DSH's official search.
 
 ### Usage
 
-Settings page: **Settings → Search Engine** (provider switch, engine, enhancement, platforms, cache TTL, proxy). Chat command: `/thin-search-engine`. On DSH 0.1.7, config is stored in `~/.dsh/profiles/<profile>/cordis.patch.yml` under the `thin-search` entry (see the Chinese section above for the full schema).
+Settings page: **Plugins → `dsh-thin-search` → Configure** (provider switch, engine, enhancement, platforms, cache TTL, proxy). Chat command: `/thin-search-engine`. Config is stored in `~/.dsh/profiles/<profile>/cordis.patch.yml` under the `thin-search` entry (see the Chinese section above for the full schema).
 
 ### Proxy notes
 
 Set `thin-search.config.proxy` (e.g. `http://127.0.0.1:7890`) in the settings page or `~/.dsh/profiles/<profile>/cordis.patch.yml` — no env vars needed. HTTP/HTTPS only; no SOCKS5. Only this plugin's requests go through the proxy; DSH and other plugins are untouched.
+
+### Where config lives
+
+- **Plugin settings** (engine, cache, platforms, proxy, enhancement, …) are persisted by DSH's SettingsForms into the active profile's `cordis.patch.yml`, in the `id: thin-search` row. That row is the official per-plugin slot DSH reserves; the plugin page, `/thin-search-engine` and the bridge API all read/write through `settings.describe/mutate` (atomic writes, file lock, revision conflict detection).
+- The plugin deliberately **does not keep a private YAML/JSON store**: a store outside SettingsForms would lose the plugin-page form projection, `.volatile()` hot updates, profile scoping and the legacy `settings.yaml` migration.
+- **The search provider (`web.searchProvider`) belongs to the official `web` row**: since 0.2.1 the switch goes through `SettingsForms.mutate("web", …)` (same authoritative source as the official Web Search settings page, effective immediately); only 0.1.7–0.2.0 fall back to the marked managed block. If the profile patch already contains a user-managed `- id: web` row, the plugin **refuses** to append a duplicate (duplicate ids conflict with ConfigEditor's id-based lookup and per-layer dedup, so a save can silently fail to apply) and asks you to switch manually.
 
 > **Known limits**: DuckDuckGo anti-bot (HTTP 202) and public SearXNG rate limits (HTTP 429) apply to proxy/datacenter egress IPs. Prefer **Bing / AnySearch** behind a proxy. Self-hosted SearXNG instances can be added via `searxngInstances`.
 
@@ -262,8 +281,15 @@ Set `thin-search.config.proxy` (e.g. `http://127.0.0.1:7890`) in the settings pa
 
 | Item | Requirement |
 |---|---|
-| DSH | `>= 0.1.7-rc.1` |
+| DSH | `>= 0.1.7-rc.1 < 0.3.0-0` (0.1.7–0.2.x including prereleases; verified on 0.1.7-rc.1, 0.2.0-rc.2 and 0.2.1-rc.2) |
 | Node.js | `>= 22.19.0` |
+
+> **DSH 0.2.1 support (v0.6.0)**:
+> - `dsh-web` 0.2.1 removed `WebRuntime.searchProviderId`; provider selection now reads the volatile `config.searchProvider` on every call. The plugin no longer writes that field (writing it only creates an inert own property) and instead reads `config.searchProvider.get()`, logging an actionable warning when no provider is configured.
+> - **Engine-mode switching** now goes through `SettingsForms.mutate("web", …)` on 0.2.1 (the `web` fields became volatile), so it shares the official Web Search settings page's authoritative config and takes effect immediately; on 0.1.7–0.2.0 the same switch falls back to the managed profile-patch block (restart required).
+> - The official 0.2.1-rc.2 Web Search settings toggle (DeepSeek Search / Fetch APIs) writes the same `web.searchProvider` key; the last save wins. The plugin page shows the currently effective provider id.
+> - A deployment that explicitly sets `tools: { mode: both }` will fail schema validation on 0.2.1 (`both` was removed), dropping the whole `tools` service — and with it this plugin's tools. Use `native` or `ptc`.
+> - devDependencies are pinned to `0.2.1-rc.2`; the discontinued `@deepseek-ai/dsh-invariants` was dropped.
 
 > **DSH 0.1.7 migration**: DSH 0.1.7 removed the old `SettingsProvider.installSection()` namespace API. The plugin now declares every editable field with `.volatile()`, attaches its custom page through `SettingsForms.configure({ auto: false }, ctx.fiber)`, and maps the bridge's logical `thin-search` namespace to the `thin-search` Loader profile entry. Saves are persisted to the active profile's `cordis.patch.yml`. The entry id deliberately matches the legacy `settings.yaml` `thin-search:` section so DSH 0.1.7 can import existing settings automatically on first boot.
 >

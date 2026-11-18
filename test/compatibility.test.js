@@ -12,6 +12,7 @@ import {
   THIN_SEARCH_NS,
   apply,
   detectEngineMode,
+  effectiveSearchProviderId,
   setEngineMode,
 } from "../lib/index.js";
 
@@ -39,7 +40,7 @@ function readConfig(config) {
   return Object.fromEntries(CONFIG_FIELDS.map((key) => [key, config[key].get()]));
 }
 
-function createHarness(overrides = {}) {
+function createHarness(overrides = {}, options = {}) {
   let values = {
     provider: "bing",
     searchEnhance: false,
@@ -55,6 +56,12 @@ function createHarness(overrides = {}) {
     ...overrides,
   };
   let revision = 0;
+  // 官方 web entry 的假实现：0.2.1 为 volatile 配置引用；webVolatile: false 模拟 0.1.7/0.2.0
+  let webProviderId = options.webProviderId ?? "thin-search";
+  let webFetchProviderId = options.webFetchProviderId ?? "http";
+  let webRevision = 0;
+  let webConflictPending = options.webConflictOnce === true;
+  const documentPath = options.documentPath ?? join(tmpdir(), "dsh-thin-search-test-profile", "cordis.patch.yml");
   const config = Object.fromEntries(
     CONFIG_FIELDS.map((key) => [key, { get: () => values[key] }]),
   );
@@ -74,17 +81,44 @@ function createHarness(overrides = {}) {
     revision,
     applies: "live",
   });
+  const webDescriptor = () => ({
+    ns: "web",
+    schema: {},
+    value: { searchProvider: webProviderId, fetchProvider: webFetchProviderId },
+    revision: webRevision,
+    applies: "live",
+  });
   const settings = {
     writable: true,
-    documentPath: join(tmpdir(), "dsh-thin-search-test-profile", "cordis.patch.yml"),
+    documentPath,
     configure(policy, owner) {
       configureCalls.push({ policy, owner });
       return () => {};
     },
     describe() {
-      return [descriptor()];
+      return [descriptor(), webDescriptor()];
     },
     async mutate(ns, ops, expectedRevision) {
+      if (ns === "web") {
+        // 0.1.7 / 0.2.0：web 的字段不是 volatile，SettingsForms 拒绝写入
+        if (options.webVolatile === false) {
+          throw new Error('Plugin entry "web" has no volatile fields');
+        }
+        if (webConflictPending) {
+          // 模拟官方设置页同时保存：revision 前进后抛出冲突，插件应重读并重试一次
+          webConflictPending = false;
+          webRevision += 1;
+          throw Object.assign(new Error("settings conflict"), { code: "SETTINGS_CONFLICT" });
+        }
+        assert.equal(expectedRevision, webRevision);
+        for (const operation of ops) {
+          assert.equal(operation.op, "set");
+          if (operation.path[0] === "searchProvider") webProviderId = operation.value;
+          if (operation.path[0] === "fetchProvider") webFetchProviderId = operation.value;
+        }
+        webRevision += 1;
+        return;
+      }
       assert.equal(ns, SETTINGS_ENTRY_ID);
       assert.equal(expectedRevision, 0);
       for (const operation of ops) {
@@ -119,8 +153,9 @@ function createHarness(overrides = {}) {
       return () => promptSections.delete(section.name);
     },
   };
+  // DSH 0.2.1 起 dsh-web 没有 searchProviderId 实例字段，只保留 volatile 配置引用
   const web = {
-    searchProviderId: "thin-search",
+    config: { searchProvider: { get: () => webProviderId } },
     registerSearchProvider(provider) {
       registeredProviders.push(provider);
       return () => {};
@@ -170,10 +205,17 @@ function createHarness(overrides = {}) {
     configureCalls,
     registeredTools,
     registeredProviders,
+    settings,
     web,
     routes,
     promptSections,
     eventHandlers,
+    getWebProvider() {
+      return webProviderId;
+    },
+    getWebFetchProvider() {
+      return webFetchProviderId;
+    },
     setValue(key, value) {
       values[key] = value;
     },
@@ -274,9 +316,8 @@ test("engine-mode edits use an explicit profile path with atomic locking", async
   }
 });
 
-test("apply integrates with DSH 0.1.7 SettingsForms and volatile config events", async () => {
+test("apply integrates with DSH 0.2.1 SettingsForms and volatile config events", async () => {
   const harness = createHarness();
-  harness.web.searchProviderId = undefined;
   apply(harness.ctx, harness.config);
 
   assert.equal(harness.configureCalls.length, 1);
@@ -286,7 +327,8 @@ test("apply integrates with DSH 0.1.7 SettingsForms and volatile config events",
   assert.equal(harness.registeredProviders.length, 1);
   assert.equal(harness.registeredProviders[0].id, "thin-search");
   assert.equal(harness.registeredProviders[0].available(), true);
-  assert.equal(harness.web.searchProviderId, "thin-search");
+  // 0.2.1 删除了 searchProviderId：插件不得再写该字段（写入只会成为无效自有属性）
+  assert.equal(Object.hasOwn(harness.web, "searchProviderId"), false);
   assert.deepEqual(
     harness.registeredTools.map((tool) => tool.name),
     ["free_search_test", "platform_search", "advanced_search"],
@@ -306,6 +348,7 @@ test("apply integrates with DSH 0.1.7 SettingsForms and volatile config events",
   assert.equal(engineMode.body.ok, true);
   assert.equal(engineMode.body.value.mode, "thin");
   assert.equal(engineMode.body.value.applied, true);
+  assert.equal(engineMode.body.value.provider, "thin-search");
 
   const mutateRoute = harness.routes.get("/api/dsh-thin-search-settings/mutate");
   const mutated = await invokeRoute(mutateRoute, {
@@ -323,4 +366,134 @@ test("apply integrates with DSH 0.1.7 SettingsForms and volatile config events",
   harness.eventHandlers.get("loader/volatile-update")();
   const refreshedPrompt = harness.promptSections.get("thin-search:engines")?.text;
   assert.match(refreshedPrompt, /Current engine: searxng/);
+});
+
+test("effectiveSearchProviderId reads the 0.2.1 volatile config, then the legacy field, then the env", () => {
+  const saved = process.env.DSH_WEB_SEARCH_PROVIDER;
+  delete process.env.DSH_WEB_SEARCH_PROVIDER;
+  try {
+    assert.equal(
+      effectiveSearchProviderId({ config: { searchProvider: { get: () => "thin-search" } } }),
+      "thin-search",
+    );
+    assert.equal(effectiveSearchProviderId({ searchProviderId: "deepseek-official" }), "deepseek-official");
+    assert.equal(effectiveSearchProviderId({}), undefined);
+    assert.equal(effectiveSearchProviderId({ config: { searchProvider: { get: () => undefined } } }), undefined);
+    process.env.DSH_WEB_SEARCH_PROVIDER = "env-provider";
+    assert.equal(effectiveSearchProviderId({}), "env-provider");
+    // config 引用优先于 legacy 字段与环境变量
+    assert.equal(
+      effectiveSearchProviderId({ config: { searchProvider: { get: () => "thin-search" } }, searchProviderId: "x" }),
+      "thin-search",
+    );
+  } finally {
+    if (saved === undefined) delete process.env.DSH_WEB_SEARCH_PROVIDER;
+    else process.env.DSH_WEB_SEARCH_PROVIDER = saved;
+  }
+});
+
+test("engine mode switches the official web entry through SettingsForms on 0.2.1", async () => {
+  const harness = createHarness();
+  apply(harness.ctx, harness.config);
+  const route = harness.routes.get("/api/dsh-thin-search-settings/engine-mode");
+
+  const official = await invokeRoute(route, { action: "set", mode: "official" });
+  assert.equal(official.body.ok, true);
+  assert.equal(official.body.value.mode, "official");
+  assert.equal(official.body.value.applied, true);
+  assert.equal(official.body.value.via, "settings");
+  assert.equal(official.body.value.provider, "deepseek-official");
+  assert.equal(harness.getWebProvider(), "deepseek-official");
+  assert.equal(harness.getWebFetchProvider(), "http");
+
+  const thin = await invokeRoute(route, { action: "set", mode: "thin" });
+  assert.equal(thin.body.ok, true);
+  assert.equal(thin.body.value.mode, "thin");
+  assert.equal(thin.body.value.applied, true);
+  assert.equal(thin.body.value.via, "settings");
+  assert.equal(harness.getWebProvider(), "thin-search");
+});
+
+test("engine mode retries once on a settings conflict", async () => {
+  const harness = createHarness({}, { webConflictOnce: true });
+  apply(harness.ctx, harness.config);
+  const route = harness.routes.get("/api/dsh-thin-search-settings/engine-mode");
+  const result = await invokeRoute(route, { action: "set", mode: "official" });
+  assert.equal(result.body.ok, true);
+  assert.equal(result.body.value.via, "settings");
+  assert.equal(result.body.value.applied, true);
+  assert.equal(harness.getWebProvider(), "deepseek-official");
+});
+
+test("engine-mode refuses to duplicate a user-managed web row", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "dsh-thin-search-dup-"));
+  const patchPath = join(directory, "cordis.patch.yml");
+  const userRow = "- id: web\n  config:\n    searchProvider: deepseek-search-api\n    fetchProvider: http\n";
+  try {
+    await writeFile(join(directory, "package.json"), "{}\n");
+    await writeFile(patchPath, userRow);
+    // 追加第二条 `- id: web` 会让 ConfigEditor 把该行判为不可寻址（settings 里直接消失），必须拒绝
+    await assert.rejects(() => setEngineMode("official", patchPath), /user-managed/);
+    await assert.rejects(() => setEngineMode("thin", patchPath), /user-managed/);
+    assert.equal(await readFile(patchPath, "utf8"), userRow, "refused writes must leave the patch untouched");
+
+    // 目标值已经一致时视为 no-op，不报错也不写第二行
+    const thinRow = "- id: web\n  config:\n    searchProvider: thin-search\n    fetchProvider: http\n";
+    await writeFile(patchPath, thinRow);
+    await setEngineMode("thin", patchPath);
+    assert.equal(await readFile(patchPath, "utf8"), thinRow);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("engine-mode rejects a patch that already has both the managed block and a user web row", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "dsh-thin-search-dup2-"));
+  const patchPath = join(directory, "cordis.patch.yml");
+  const content = [
+    "- id: web",
+    "  config:",
+    "    searchProvider: deepseek-search-api",
+    "# >>> dsh-thin-search: engine-mode block (managed, do not edit) >>>",
+    "- id: web",
+    "  config:",
+    "    searchProvider: deepseek-official",
+    "    fetchProvider: http",
+    "# <<< dsh-thin-search: engine-mode block <<<",
+    "",
+  ].join("\n");
+  try {
+    await writeFile(join(directory, "package.json"), "{}\n");
+    await writeFile(patchPath, content);
+    await assert.rejects(() => setEngineMode("official", patchPath), /both the thin-search managed block/);
+    assert.equal(await readFile(patchPath, "utf8"), content);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("engine mode falls back to the profile patch when the web entry is not volatile", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "dsh-thin-search-engine-"));
+  const patchPath = join(directory, "cordis.patch.yml");
+  try {
+    await writeFile(join(directory, "package.json"), "{}\n");
+    await writeFile(patchPath, "[]\n");
+    const harness = createHarness({}, { webVolatile: false, documentPath: patchPath });
+    apply(harness.ctx, harness.config);
+    const route = harness.routes.get("/api/dsh-thin-search-settings/engine-mode");
+
+    const official = await invokeRoute(route, { action: "set", mode: "official" });
+    assert.equal(official.body.ok, true);
+    assert.equal(official.body.value.via, "file");
+    // 0.1.7 / 0.2.0 的文件回退路径要重启才生效
+    assert.equal(official.body.value.applied, false);
+    assert.match(await readFile(patchPath, "utf8"), /searchProvider: deepseek-official/);
+    assert.equal(harness.getWebProvider(), "thin-search");
+
+    const thin = await invokeRoute(route, { action: "set", mode: "thin" });
+    assert.equal(thin.body.ok, true);
+    assert.equal((await readFile(patchPath, "utf8")).trim(), "[]");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
