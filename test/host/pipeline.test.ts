@@ -1,8 +1,28 @@
 import { describe, expect, it } from 'vitest'
 import { WebError } from '@deepseek-ai/dsh-web'
-import { buildCacheKey, buildEngineChain, clampMaxResults, configCacheKey, SearchPipeline } from '../../src/search/pipeline'
+import {
+  buildCacheKey,
+  buildEngineChain,
+  clampMaxResults,
+  computeEngineBudget,
+  configCacheKey,
+  MIN_ENGINE_BUDGET_MS,
+  SearchPipeline,
+} from '../../src/search/pipeline'
 import { ENGINE_IDS } from '../../src/search/engines/types'
 import { fakeEngine, sources, testConfig, textHttp } from './helpers'
+
+/** Simulate the sequential allocation of one total budget across a chain. */
+function budgetSequence(totalBudgetMs: number, chainLength: number, engineTimeoutMs: number): number[] {
+  const budgets: number[] = []
+  let remaining = totalBudgetMs
+  for (let index = 0; index < chainLength; index++) {
+    const budget = computeEngineBudget(remaining, chainLength - index, engineTimeoutMs)
+    budgets.push(budget)
+    remaining -= budget
+  }
+  return budgets
+}
 
 describe('engine chain', () => {
   it('keeps the preferred engine first without a time window', () => {
@@ -12,6 +32,41 @@ describe('engine chain', () => {
   it('moves time-capable engines to the front when filtering', () => {
     expect(buildEngineChain('bing', { days: 7 }, ENGINE_IDS)).toEqual(['searxng', 'ddg', 'ddg-lite', 'bing', 'anysearch'])
     expect(buildEngineChain('ddg', { days: 7 }, ENGINE_IDS)).toEqual(['ddg', 'searxng', 'ddg-lite', 'bing', 'anysearch'])
+  })
+
+  it('splits the remaining budget fairly across the engines still to try', () => {
+    expect(MIN_ENGINE_BUDGET_MS).toBe(6_000)
+    expect(computeEngineBudget(35_000, 5, 12_000)).toBe(7_000)
+    expect(computeEngineBudget(28_000, 4, 12_000)).toBe(7_000)
+    expect(computeEngineBudget(7_000, 1, 12_000)).toBe(7_000)
+    expect(computeEngineBudget(100_000, 2, 12_000)).toBe(12_000)
+    expect(computeEngineBudget(3_000, 5, 12_000)).toBe(3_000)
+    expect(computeEngineBudget(35_000, 5, 4_000)).toBe(4_000)
+    expect(computeEngineBudget(35_000, 1, 12_000)).toBe(12_000)
+  })
+
+  it('guarantees the tail minimum only while budget and timeout allow it', () => {
+    const minimum = MIN_ENGINE_BUDGET_MS
+    const production = budgetSequence(35_000, 5, 12_000)
+    expect(35_000).toBeGreaterThanOrEqual(5 * minimum)
+    expect(production.every(budget => budget >= minimum)).toBe(true)
+
+    const smallBudget = budgetSequence(10_000, 5, 12_000)
+    expect(10_000).toBeLessThan(5 * minimum)
+    expect(smallBudget).toEqual([6_000, 4_000, 0, 0, 0])
+    expect(smallBudget.every(budget => budget >= minimum)).toBe(false)
+    expect(computeEngineBudget(3_000, 5, 12_000)).toBe(3_000)
+  })
+
+  it('records the longer-chain tail below MIN when the budget runs out', () => {
+    expect(budgetSequence(35_000, 6, 12_000)).toEqual([6_000, 6_000, 6_000, 6_000, 6_000, 5_000])
+  })
+
+  it('treats engineTimeoutMs as authoritative below the MIN floor', () => {
+    expect(12_000).toBeGreaterThan(MIN_ENGINE_BUDGET_MS)
+    expect(computeEngineBudget(35_000, 2, 5_000)).toBe(5_000)
+    expect(computeEngineBudget(35_000, 5, 4_000)).toBe(4_000)
+    expect(computeEngineBudget(35_000, 5, 12_000)).toBe(7_000)
   })
 
   it('clamps result counts and builds stable cache keys', () => {
@@ -155,6 +210,151 @@ describe('SearchPipeline fallback', () => {
     const result = await pipeline.search({ query: 'slow' })
     expect(result.engine).toBe('anysearch')
     expect(result.content).toContain('timed out')
+  })
+
+  it('does not starve the fourth engine when three time-capable engines time out', async () => {
+    let clock = 0
+    const calls: string[] = []
+    const budgets: number[] = []
+    const hanging = (id: 'searxng' | 'ddg' | 'ddg-lite') => fakeEngine(id, async (context) => {
+      calls.push(id)
+      budgets.push(context.deadline - clock)
+      clock += 8_750
+      throw new Error('engine timed out')
+    }, true)
+    const pipeline = new SearchPipeline({
+      getConfig: () => testConfig({ provider: 'searxng' }),
+      http: textHttp(''),
+      now: () => clock,
+      totalBudgetMs: 35_000,
+      engineTimeoutMs: 12_000,
+      engines: [
+        hanging('searxng'),
+        hanging('ddg'),
+        hanging('ddg-lite'),
+        fakeEngine('bing', async (context) => {
+          calls.push('bing')
+          budgets.push(context.deadline - clock)
+          return sources('https://example.com/bing')
+        }),
+      ],
+    })
+
+    const result = await pipeline.search({ query: 'fallback', timeRange: 'week' })
+    expect(calls).toEqual(['searxng', 'ddg', 'ddg-lite', 'bing'])
+    expect(result.engine).toBe('bing')
+    expect(result.sources[0]?.url).toBe('https://example.com/bing')
+    expect(budgets).toEqual([8_750, 8_750, 8_750, 8_750])
+    expect(clock).toBeLessThanOrEqual(35_000)
+  })
+
+  it('tries every chain engine within the total budget with five time-capable-first engines', async () => {
+    let clock = 0
+    const calls: string[] = []
+    const budgets: number[] = []
+    const makeEngine = (id: 'searxng' | 'ddg' | 'ddg-lite' | 'bing' | 'anysearch', timeCapable: boolean) =>
+      fakeEngine(id, async (context) => {
+        calls.push(id)
+        budgets.push(context.deadline - clock)
+        clock += 7_000
+        throw new Error('engine timed out')
+      }, timeCapable)
+    const pipeline = new SearchPipeline({
+      getConfig: () => testConfig({ provider: 'searxng' }),
+      http: textHttp(''),
+      now: () => clock,
+      totalBudgetMs: 35_000,
+      engineTimeoutMs: 12_000,
+      engines: [
+        makeEngine('searxng', true),
+        makeEngine('ddg', true),
+        makeEngine('ddg-lite', true),
+        makeEngine('bing', false),
+        makeEngine('anysearch', false),
+      ],
+    })
+
+    const error = await pipeline.search({ query: 'all fail', timeRange: 'week' }).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(WebError)
+    expect((error as WebError).code).toBe('WEB_PROVIDER_ERROR')
+    expect(calls).toEqual(['searxng', 'ddg', 'ddg-lite', 'bing', 'anysearch'])
+    expect(budgets).toEqual([7_000, 7_000, 7_000, 7_000, 7_000])
+    expect(clock).toBeLessThanOrEqual(35_000)
+  })
+
+  it('records that a total budget below chainLength * MIN cannot reach every engine', async () => {
+    let clock = 0
+    const calls: string[] = []
+    const budgets: number[] = []
+    const makeEngine = (id: 'searxng' | 'ddg' | 'ddg-lite' | 'bing' | 'anysearch') =>
+      fakeEngine(id, async (context) => {
+        calls.push(id)
+        const budget = context.deadline - clock
+        budgets.push(budget)
+        clock += budget
+        throw new Error('engine timed out')
+      }, true)
+    const pipeline = new SearchPipeline({
+      getConfig: () => testConfig({ provider: 'searxng' }),
+      http: textHttp(''),
+      now: () => clock,
+      totalBudgetMs: 10_000,
+      engineTimeoutMs: 12_000,
+      engines: [
+        makeEngine('searxng'),
+        makeEngine('ddg'),
+        makeEngine('ddg-lite'),
+        makeEngine('bing'),
+        makeEngine('anysearch'),
+      ],
+    })
+
+    const error = await pipeline.search({ query: 'small budget', timeRange: 'week' }).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(WebError)
+    expect((error as WebError).message).toContain('timed out')
+    expect(calls).toEqual(['searxng', 'ddg'])
+    expect(budgets).toEqual([6_000, 4_000])
+    expect(clock).toBeLessThanOrEqual(10_000)
+  })
+
+  it('keeps engineTimeoutMs as the cap for a single engine and below the fair share', async () => {
+    let clock = 0
+    let singleBudget: number | undefined
+    const single = new SearchPipeline({
+      getConfig: () => testConfig(),
+      http: textHttp(''),
+      now: () => clock,
+      totalBudgetMs: 35_000,
+      engineTimeoutMs: 12_000,
+      engines: [fakeEngine('bing', async (context) => {
+        singleBudget = context.deadline - clock
+        return sources('https://example.com/single')
+      })],
+    })
+    await single.search({ query: 'single' })
+    expect(singleBudget).toBe(12_000)
+
+    const budgets: number[] = []
+    const capped = new SearchPipeline({
+      getConfig: () => testConfig(),
+      http: textHttp(''),
+      now: () => clock,
+      totalBudgetMs: 100_000,
+      engineTimeoutMs: 5_000,
+      engines: [
+        fakeEngine('bing', async (context) => {
+          budgets.push(context.deadline - clock)
+          clock += 5_000
+          throw new Error('engine timed out')
+        }),
+        fakeEngine('anysearch', async (context) => {
+          budgets.push(context.deadline - clock)
+          return sources('https://example.com/capped')
+        }),
+      ],
+    })
+    await capped.search({ query: 'capped' })
+    expect(budgets).toEqual([5_000, 5_000])
   })
 })
 

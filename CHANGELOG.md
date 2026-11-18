@@ -121,6 +121,14 @@ locale keys and patch file are frozen for the v1.0.0 release.
   cache, time-range and config helpers import the source modules directly. The
   suite uses a stubbed network and does not call live search engines.
 
+### Fixed
+
+- Engine fallback now gives each chain member a fair share of the remaining total
+  search budget (`floor(remaining / remaining engines)`, clamped to 6 s through
+  `engineTimeoutMs`). A slow SearXNG/DDG prefix can no longer consume the whole
+  35-second budget and starve Bing or AnySearch when `timeRange` puts the
+  time-capable engines first.
+
 ### Known issues (planned for v1.0.1)
 
 These are client-side polish items recorded by the v1.0.0 cross-review. They do

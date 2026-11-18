@@ -64,8 +64,48 @@ export interface SearchPipelineOptions {
 
 const DEFAULT_TOTAL_BUDGET_MS = 35_000
 const DEFAULT_ENGINE_TIMEOUT_MS = 12_000
+/**
+ * Fair-share floor for one engine when {@code engineTimeoutMs >= MIN_ENGINE_BUDGET_MS}.
+ * It is not a universal tail guarantee: a remaining total below this value wins
+ * (so the search never exceeds {@code totalBudgetMs}), and a configured
+ * engine timeout below this value is authoritative instead.
+ */
+export const MIN_ENGINE_BUDGET_MS = 6_000
 const DEFAULT_MAX_RESULTS = 5
 const MAX_RESULTS_LIMIT = 10
+
+/**
+ * Split the remaining total budget fairly across the engines still to try:
+ * {@code floor(remaining / remainingEngines)}, clamped to
+ * [{@link MIN_ENGINE_BUDGET_MS}, engineTimeoutMs], and never above the
+ * remaining total budget.
+ *
+ * The MIN floor is conditional. The tail-engine guarantee holds only when
+ * {@code totalBudgetMs >= chainLength * MIN_ENGINE_BUDGET_MS} and
+ * {@code engineTimeoutMs >= MIN_ENGINE_BUDGET_MS}; under those conditions every
+ * engine is attempted and each reached engine gets at least MIN. The default
+ * engineTimeoutMs is 12000, above the 6000 floor. This does not make every
+ * engine reachable for every budget: when
+ * {@code totalBudgetMs < chainLength * MIN_ENGINE_BUDGET_MS} (for example
+ * 5 engines / 10 s), budgets degrade to {@code [6000, 4000, 0, 0, 0]} and the
+ * later engines are not attempted, because the total wall-clock cap wins. A
+ * longer chain likewise ends below MIN once the remaining budget runs out
+ * (6 engines / 35 s gives a 5000 ms tail). engineTimeoutMs is a hard cap; when
+ * {@code engineTimeoutMs < MIN_ENGINE_BUDGET_MS}, the configured engine timeout
+ * is authoritative and the floor never raises it (for example 5000 ms stays
+ * 5000 ms).
+ */
+export function computeEngineBudget(
+  remainingBudgetMs: number,
+  remainingEngines: number,
+  engineTimeoutMs: number,
+): number {
+  if (!Number.isFinite(remainingBudgetMs) || remainingBudgetMs <= 0) return 0
+  if (!Number.isFinite(remainingEngines) || remainingEngines < 1) return Math.min(remainingBudgetMs, engineTimeoutMs)
+  const fairShare = Math.floor(remainingBudgetMs / remainingEngines)
+  const bounded = Math.min(engineTimeoutMs, Math.max(MIN_ENGINE_BUDGET_MS, fairShare))
+  return Math.max(0, Math.min(remainingBudgetMs, bounded))
+}
 
 /** Clamp a requested result count into the range the free engines support. */
 export function clampMaxResults(value: number | undefined): number {
@@ -267,7 +307,7 @@ export class SearchPipeline {
     let lastError: string | undefined
     let timedOut = false
 
-    for (const engineId of chain) {
+    for (const [index, engineId] of chain.entries()) {
       throwIfAborted(signal)
       const remaining = totalDeadline - this.now()
       if (remaining <= 0) {
@@ -276,7 +316,9 @@ export class SearchPipeline {
       }
       const engine = this.engines.get(engineId)
       if (engine === undefined) continue
-      const engineDeadline = Math.min(totalDeadline, this.now() + this.engineTimeoutMs)
+      const remainingEngines = chain.length - index
+      const budget = computeEngineBudget(remaining, remainingEngines, this.engineTimeoutMs)
+      const engineDeadline = Math.min(totalDeadline, this.now() + budget)
       const context: EngineContext = {
         query: effectiveQuery,
         maxResults,
