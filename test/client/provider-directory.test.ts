@@ -29,16 +29,69 @@ describe('ProviderDirectory', () => {
     expect(web.reads).toBe(1)
   })
 
-  it('loads once on ensure and coalesces a read already in flight', async () => {
-    const web = fakeWeb([{ ok: true, value: { search: [provider('a')], fetch: [] } }])
+  it('loads once on ensure and schedules one rerun for an explicit refresh in flight', async () => {
+    const web = fakeWeb([
+      { ok: true, value: { search: [provider('a')], fetch: [] } },
+      { ok: true, value: { search: [provider('b')], fetch: [] } },
+    ])
     const directory = new ProviderDirectory(web)
     directory.ensure()
     directory.ensure()
     const second = directory.refresh()
     await second
     await flushMicrotasks()
+    expect(web.reads).toBe(2)
+    expect(directory.getSnapshot()).toEqual({ status: 'ready', providers: [provider('b')] })
+  })
+
+  it('coalesces multiple refresh requests during one read into a single rerun', async () => {
+    let resolveFirst!: (value: RemoteResult<WebProviderList>) => void
+    let resolveSecond!: (value: RemoteResult<WebProviderList>) => void
+    let reads = 0
+    const web: RemoteWebService & { readonly reads: number } = {
+      get reads() { return reads },
+      listProviders: () => {
+        reads += 1
+        return reads === 1
+          ? new Promise((resolve) => { resolveFirst = resolve })
+          : new Promise((resolve) => { resolveSecond = resolve })
+      },
+    }
+    const directory = new ProviderDirectory(web)
+    const first = directory.refresh()
+    const second = directory.refresh()
+    const third = directory.refresh()
     expect(web.reads).toBe(1)
-    expect(directory.getSnapshot().status).toBe('ready')
+    resolveFirst({ ok: true, value: { search: [provider('old')], fetch: [] } })
+    await flushMicrotasks()
+    expect(web.reads).toBe(2)
+    resolveSecond({ ok: true, value: { search: [provider('new')], fetch: [] } })
+    await first
+    await second
+    await third
+    expect(web.reads).toBe(2)
+    expect(directory.getSnapshot()).toEqual({ status: 'ready', providers: [provider('new')] })
+  })
+
+  it('does not rerun after disposal', async () => {
+    let resolveFirst!: (value: RemoteResult<WebProviderList>) => void
+    let reads = 0
+    const web: RemoteWebService & { readonly reads: number } = {
+      get reads() { return reads },
+      listProviders: () => {
+        reads += 1
+        return new Promise((resolve) => { resolveFirst = resolve })
+      },
+    }
+    const directory = new ProviderDirectory(web)
+    const first = directory.refresh()
+    void directory.refresh()
+    directory.dispose()
+    resolveFirst({ ok: true, value: { search: [provider('late')], fetch: [] } })
+    await first
+    await flushMicrotasks()
+    expect(web.reads).toBe(1)
+    expect(directory.getSnapshot().providers).toEqual([])
   })
 
   it('keeps the last accepted list when a refresh fails', async () => {
