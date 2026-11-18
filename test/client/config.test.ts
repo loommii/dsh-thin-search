@@ -96,8 +96,11 @@ describe('validateSetting', () => {
     expect(validateSetting('cacheTtl', 1.5)?.key).toBe('validation.cacheTtl')
   })
 
-  it('accepts only ~/ and absolute prompt paths', () => {
+  it('accepts Windows drive and UNC prompt paths but rejects relative paths', () => {
+    expect(validateSetting('enhanceSystemPromptPath', 'C:\\Users\\me\\prompt.md')).toBeUndefined()
+    expect(validateSetting('enhanceSystemPromptPath', '\\\\server\\share\\prompt.md')).toBeUndefined()
     expect(validateSetting('enhanceSystemPromptPath', 'relative/prompt.md')?.key).toBe('validation.enhanceSystemPromptPath')
+    expect(validateSetting('enhanceSystemPromptPath', 'prompt.md')?.key).toBe('validation.enhanceSystemPromptPath')
   })
 
   it('reports invalid SearXNG entries with their text', () => {

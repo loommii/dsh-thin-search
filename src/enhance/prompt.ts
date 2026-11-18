@@ -121,8 +121,9 @@ function normalizeMaxBytes(value: number | undefined): number {
 
 /**
  * Expand {@code ~} and validate an absolute path. Empty input means the built-in
- * prompt; a relative path is invalid and also resolves to undefined so the page
- * validation and the Host agree.
+ * prompt; a relative path is invalid and also resolves to undefined. The page
+ * accepts absolute path shapes for every platform and leaves the final
+ * platform-specific decision here.
  */
 export function resolveEnhanceSystemPromptPath(input: string, home: string = homedir()): string | undefined {
   const trimmed = input.trim()
