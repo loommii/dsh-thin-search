@@ -127,11 +127,22 @@ describe('engine requests', () => {
     expect(DEFAULT_SEARXNG_INSTANCES.length).toBeGreaterThan(0)
   })
 
-  it('supports a configured SearXNG instance list', async () => {
+  it('supports a configured SearXNG instance list at the root path', async () => {
     const http = routingHttp([{ match: 'custom.example', body: fixture('searxng.json') }])
     const context = engineContext({ http, config: testConfig({ searxngInstances: ['https://custom.example'] }) })
     const sources = await searxngEngine.search(context)
     expect(sources.length).toBeGreaterThan(0)
     expect(http.calls[0]?.url).toContain('https://custom.example/search')
+  })
+
+  it('preserves a SearXNG instance base path', async () => {
+    const http = textHttp(fixture('searxng.json'))
+    const context = engineContext({
+      http,
+      config: testConfig({ searxngInstances: ['https://host.example/searxng'] }),
+    })
+    await searxngEngine.search(context)
+    const requested = new URL(http.calls[0]?.url ?? '')
+    expect(requested.origin + requested.pathname).toBe('https://host.example/searxng/search')
   })
 })
