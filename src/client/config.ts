@@ -64,6 +64,21 @@ export function isPlatformId(value: unknown): value is PlatformId {
   return typeof value === 'string' && (PLATFORM_IDS as readonly string[]).includes(value)
 }
 
+/**
+ * Whether text looks like an absolute path on any platform the client runs on:
+ * `~/` (expanded by the Host), a POSIX `/` root, a Windows drive root, or a
+ * UNC share. The Host still decides whether the path exists for its platform.
+ * @param value - path text to test.
+ * @returns true for an absolute-looking path, false for a relative one.
+ */
+export function isAbsoluteLikePath(value: string): boolean {
+  const path = value.trim()
+  return path.startsWith('~/')
+    || path.startsWith('/')
+    || /^[A-Za-z]:[\\/]/u.test(path)
+    || /^\\\\[^\\]/u.test(path)
+}
+
 /** The bundle settings section as the client reads it. */
 export interface ThinSearchValues {
   readonly provider?: string
@@ -210,7 +225,7 @@ export function validateSetting(field: keyof Draft, value: unknown): DraftError 
   }
   if (field === 'enhanceSystemPromptPath') {
     const path = typeof value === 'string' ? value.trim() : ''
-    return path === '' || path.startsWith('~/') || path.startsWith('/')
+    return path === '' || isAbsoluteLikePath(path)
       ? undefined
       : { key: 'validation.enhanceSystemPromptPath' }
   }
