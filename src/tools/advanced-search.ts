@@ -1,4 +1,5 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { WebError } from '@deepseek-ai/dsh-web'
 import { ENGINE_IDS, normalizeEngineId } from '../search/engines/types'
 import { parseTimeRange, type TimeRange } from '../search/time-range'
 import { clampMaxResults, type PipelineRequest } from '../search/pipeline'
@@ -75,20 +76,21 @@ export function createAdvancedSearchTool(deps: ToolHostDeps) {
     timeoutMs: 60_000,
     async execute(args, exec) {
       const query = args.query.trim()
-      if (query.length === 0) throw new Error('query is required')
+      if (query.length === 0) throw new WebError('query is required', 'WEB_INVALID_REQUEST')
       let timeRange: TimeRange | undefined = undefined
       if (args.timeRange !== undefined) {
         timeRange = parseTimeRange(args.timeRange)
         if (timeRange === undefined) {
-          throw new Error(
+          throw new WebError(
             `invalid timeRange ${JSON.stringify(args.timeRange)}: use day, week, month or year; `
             + 'a relative duration such as 12h, 3d, 2mo or 1y; or an absolute date such as 2026-07-01',
+            'WEB_INVALID_REQUEST',
           )
         }
       }
       const engine = normalizeEngineId(args.engine)
       if (args.engine !== undefined && engine === undefined) {
-        throw new Error(`unknown engine ${JSON.stringify(args.engine)}; use one of: ${ENGINE_IDS.join(', ')}`)
+        throw new WebError(`unknown engine ${JSON.stringify(args.engine)}; use one of: ${ENGINE_IDS.join(', ')}`, 'WEB_INVALID_REQUEST')
       }
       const request: PipelineRequest = {
         query,

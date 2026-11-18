@@ -169,6 +169,48 @@ describe('host tool contracts', () => {
     expect((cancelledError as WebError).code).toBe('WEB_ABORTED')
   })
 
+  it('uses WebError WEB_INVALID_REQUEST for every argument validation failure', async () => {
+    const advanced = byName(buildTools(), 'advanced_search')
+    const platform = byName(createTools({
+      pipeline: fakePipeline(),
+      platforms: fakePlatforms(),
+      getConfig: () => testConfig({ platforms: ['github'] }),
+    }), 'platform_search')
+    const cases: Array<{ run: Promise<unknown>; message: string }> = [
+      {
+        run: advanced.execute({ query: '' }, toolExec(new AbortController().signal) as never),
+        message: 'query is required',
+      },
+      {
+        run: advanced.execute({ query: 'q', timeRange: 'last fortnight' }, toolExec(new AbortController().signal) as never),
+        message: 'invalid timeRange "last fortnight": use day, week, month or year; '
+          + 'a relative duration such as 12h, 3d, 2mo or 1y; or an absolute date such as 2026-07-01',
+      },
+      {
+        run: advanced.execute({ query: 'q', engine: 'duckduckgo' }, toolExec(new AbortController().signal) as never),
+        message: 'unknown engine "duckduckgo"; use one of: bing, anysearch, searxng, ddg, ddg-lite',
+      },
+      {
+        run: platform.execute({ platform: 'unknown', query: 'q' }, toolExec(new AbortController().signal) as never),
+        message: 'unknown platform "unknown"; use one of: github, v2ex, bilibili, reddit, hn, stackoverflow, wikipedia, npm',
+      },
+      {
+        run: platform.execute({ platform: 'npm', query: 'q' }, toolExec(new AbortController().signal) as never),
+        message: 'platform "npm" is disabled in Thin Search settings; enable it on the plugin configuration page',
+      },
+      {
+        run: platform.execute({ platform: 'github', query: '' }, toolExec(new AbortController().signal) as never),
+        message: 'query is required',
+      },
+    ]
+    for (const testCase of cases) {
+      const error = await testCase.run.catch((caught: unknown) => caught)
+      expect(error).toBeInstanceOf(WebError)
+      expect((error as WebError).code).toBe('WEB_INVALID_REQUEST')
+      expect((error as WebError).message).toBe(testCase.message)
+    }
+  })
+
   it('rejects disabled and unknown platforms', async () => {
     const tools = createTools({ pipeline: fakePipeline(), platforms: fakePlatforms(), getConfig: () => testConfig({ platforms: ['github'] }) })
     const platformTool = byName(tools, 'platform_search')
