@@ -1,7 +1,7 @@
 import { parse } from 'node-html-parser'
 import type { WebSearchSource } from '@deepseek-ai/dsh-web'
 import { extractDdgUrl, normalizeSources } from '../normalize'
-import { ddgDateFilter, timeRangeTier } from '../time-range'
+import { ddgDateFilter, normalizePublishedDate, timeRangeTier } from '../time-range'
 import type { EngineContext, SearchEngine } from './types'
 
 /** Parse DuckDuckGo Lite's table-based result page. */
@@ -9,16 +9,19 @@ export function parseDdgLiteHtml(html: string, limit: number): WebSearchSource[]
   const root = parse(html)
   const links = root.querySelectorAll('a.result-link')
   const snippets = root.querySelectorAll('td.result-snippet')
+  const timestamps = root.querySelectorAll('.result-timestamp')
   const sources: WebSearchSource[] = []
   links.forEach((link, index) => {
     const url = extractDdgUrl(link.getAttribute('href'))
     if (url === undefined) return
     const title = link.text.trim()
     const snippet = snippets[index]?.text
+    const publishedAt = normalizePublishedDate(timestamps[index]?.text)
     sources.push({
       url,
       ...(title.length === 0 ? {} : { title }),
       ...(snippet === undefined ? {} : { snippet }),
+      ...(publishedAt === undefined ? {} : { publishedAt }),
     })
   })
   return normalizeSources(sources, limit)
