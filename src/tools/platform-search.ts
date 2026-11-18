@@ -63,15 +63,15 @@ export function createPlatformSearchTool(deps: ToolHostDeps) {
     timeoutMs: 30_000,
     async execute(args, exec) {
       if (!isPlatformId(args.platform)) {
-        throw new Error(`unknown platform "${args.platform}"; use one of: ${PLATFORM_IDS.join(', ')}`)
+        throw new WebError(`unknown platform "${args.platform}"; use one of: ${PLATFORM_IDS.join(', ')}`, 'WEB_INVALID_REQUEST')
       }
       const platform = args.platform
       const enabled = deps.getConfig().platforms
       if (!enabled.includes(platform)) {
-        throw new Error(`platform "${platform}" is disabled in Thin Search settings; enable it on the plugin configuration page`)
+        throw new WebError(`platform "${platform}" is disabled in Thin Search settings; enable it on the plugin configuration page`, 'WEB_INVALID_REQUEST')
       }
       const query = args.query.trim()
-      if (query.length === 0) throw new Error('query is required')
+      if (query.length === 0) throw new WebError('query is required', 'WEB_INVALID_REQUEST')
       const limit = clampMaxResults(args.maxResults)
       let sources: Awaited<ReturnType<typeof deps.platforms.search>>
       try {
