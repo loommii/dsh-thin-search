@@ -12,9 +12,8 @@ import type {
   ConfigFormSnapshot,
   LocaleService,
   LocalizedText,
-  PluginConfigViewProps,
   RemoteResult,
-  RowConfigRegistration,
+  BundleConfigRegistration,
   SettingsPathOp,
   WebProviderInfo,
   WebProviderList,
@@ -91,7 +90,12 @@ export function createFakeForm<T>(options: FakeFormOptions<T> = {}): FakeForm<T>
       return () => { listeners.delete(listener) }
     },
     async set(field, value) {
-      calls.push({ kind: 'set', field, value })
+      calls.push({
+        kind: 'set',
+        field,
+        value,
+        ...(snapshot.revision === undefined ? {} : { revision: snapshot.revision }),
+      })
       if (!accept) return false
       if (options.failWith !== undefined) throw options.failWith
       snapshot = {
@@ -103,7 +107,11 @@ export function createFakeForm<T>(options: FakeFormOptions<T> = {}): FakeForm<T>
       return true
     },
     async unset(field) {
-      calls.push({ kind: 'unset', field })
+      calls.push({
+        kind: 'unset',
+        field,
+        ...(snapshot.revision === undefined ? {} : { revision: snapshot.revision }),
+      })
       if (!accept) return false
       snapshot = {
         ...snapshot,
@@ -203,7 +211,7 @@ export interface FakeContext extends ClientContext {
   readonly records: {
     readonly effects: { readonly label: string | undefined; readonly dispose: () => void }[]
     readonly whileServedCalls: (readonly string[])[]
-    readonly registrations: { readonly options: RowConfigRegistration; readonly component: unknown }[]
+    readonly registrations: { readonly options: BundleConfigRegistration; readonly component: unknown }[]
     readonly commands: CommandContribution[]
     readonly injectCalls: (readonly string[])[]
     readonly providerReads: number
@@ -340,14 +348,6 @@ export function createFakeContext(options: FakeContextOptions = {}): FakeContext
   return ctx
 }
 
-/** The page-owner form handoff the plugin manager passes to a row entry. */
-export function pageForm<T>(fake: FakeForm<T>): { state: ConfigFormSnapshot<Record<string, unknown>>; mutate: ConfigForm<Record<string, unknown>>['mutate'] } {
-  return {
-    state: fake.form.getSnapshot() as unknown as ConfigFormSnapshot<Record<string, unknown>>,
-    mutate: fake.form.mutate.bind(fake.form),
-  }
-}
-
 /** Wait for pending microtasks so provider reads settle. */
 export async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
@@ -370,6 +370,3 @@ export function commandNamed(context: FakeContext, name: string): CommandContrib
   if (found === undefined) throw new Error(`command "${name}" was not registered`)
   return found
 }
-
-/** A component props value usable in tests without a renderer. */
-export const pageProps: PluginConfigViewProps = { view: 'page' }

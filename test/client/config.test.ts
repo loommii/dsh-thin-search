@@ -4,12 +4,12 @@ import {
   ENGINE_IDS,
   PLATFORM_IDS,
   canonicalPlatforms,
-  draftOps,
   isEngineId,
   isPlatformId,
   normalizeDraft,
   parseSearxngInstances,
-  validateDraft,
+  settingWrite,
+  validateSetting,
 } from '../../src/client/config'
 
 describe('normalizeDraft', () => {
@@ -82,71 +82,47 @@ describe('parseSearxngInstances', () => {
   })
 })
 
-describe('validateDraft', () => {
-  it('accepts the defaults', () => {
-    expect(validateDraft(DEFAULT_DRAFT)).toEqual([])
+describe('validateSetting', () => {
+  it('accepts valid per-field values', () => {
+    expect(validateSetting('cacheTtl', 0)).toBeUndefined()
+    expect(validateSetting('enhanceSystemPromptPath', '~/prompt.md')).toBeUndefined()
+    expect(validateSetting('enhanceSystemPromptPath', '/etc/prompt.md')).toBeUndefined()
+    expect(validateSetting('searxngText', 'https://searx.example.com')).toBeUndefined()
+    expect(validateSetting('provider', 'bing')).toBeUndefined()
   })
 
   it('rejects a negative or fractional cache lifetime', () => {
-    expect(validateDraft({ ...DEFAULT_DRAFT, cacheTtl: -1 }).map((error) => error.key)).toEqual(['validation.cacheTtl'])
-    expect(validateDraft({ ...DEFAULT_DRAFT, cacheTtl: 1.5 }).map((error) => error.key)).toEqual(['validation.cacheTtl'])
+    expect(validateSetting('cacheTtl', -1)?.key).toBe('validation.cacheTtl')
+    expect(validateSetting('cacheTtl', 1.5)?.key).toBe('validation.cacheTtl')
   })
 
-  it('accepts ~/ and absolute prompt paths only', () => {
-    expect(validateDraft({ ...DEFAULT_DRAFT, enhanceSystemPromptPath: '~/prompt.md' })).toEqual([])
-    expect(validateDraft({ ...DEFAULT_DRAFT, enhanceSystemPromptPath: '/etc/prompt.md' })).toEqual([])
-    expect(validateDraft({ ...DEFAULT_DRAFT, enhanceSystemPromptPath: 'relative/prompt.md' }).map((error) => error.key))
-      .toEqual(['validation.enhanceSystemPromptPath'])
+  it('accepts only ~/ and absolute prompt paths', () => {
+    expect(validateSetting('enhanceSystemPromptPath', 'relative/prompt.md')?.key).toBe('validation.enhanceSystemPromptPath')
   })
 
   it('reports invalid SearXNG entries with their text', () => {
-    const errors = validateDraft({ ...DEFAULT_DRAFT, searxngText: 'nope' })
-    expect(errors).toHaveLength(1)
-    expect(errors[0]?.key).toBe('validation.searxng')
-    expect(errors[0]?.params).toEqual({ entries: 'nope' })
+    const error = validateSetting('searxngText', 'nope')
+    expect(error?.key).toBe('validation.searxng')
+    expect(error?.params).toEqual({ entries: 'nope' })
   })
 })
 
-describe('draftOps', () => {
-  it('submits nothing for an untouched draft', () => {
-    expect(draftOps(DEFAULT_DRAFT, DEFAULT_DRAFT)).toEqual([])
-    expect(draftOps(DEFAULT_DRAFT, {})).toEqual([])
+describe('settingWrite', () => {
+  it('maps the SearXNG textarea to the instance array', () => {
+    expect(settingWrite('searxngText', 'https://a.example.com/\nhttps://b.example.com')).toEqual({
+      field: 'searxngInstances',
+      value: ['https://a.example.com', 'https://b.example.com'],
+    })
   })
 
-  it('submits one operation per changed field', () => {
-    const next = {
-      ...DEFAULT_DRAFT,
-      provider: 'searxng' as const,
-      cacheTtl: 0,
-      searchEnhance: true,
-      enhanceModel: 'deepseek:flash',
-      enhanceSystemPromptPath: '~/prompt.md',
-      bingMarket: 'en-US',
-      region: 'us-en',
-      searxngText: 'https://searx.example.com',
-      platforms: ['github' as const, 'npm' as const],
-    }
-    expect(draftOps(next, DEFAULT_DRAFT)).toEqual([
-      { op: 'set', path: ['provider'], value: 'searxng' },
-      { op: 'set', path: ['platforms'], value: ['github', 'npm'] },
-      { op: 'set', path: ['cacheTtl'], value: 0 },
-      { op: 'set', path: ['searchEnhance'], value: true },
-      { op: 'set', path: ['enhanceModel'], value: 'deepseek:flash' },
-      { op: 'set', path: ['enhanceSystemPromptPath'], value: '~/prompt.md' },
-      { op: 'set', path: ['bingMarket'], value: 'en-US' },
-      { op: 'set', path: ['region'], value: 'us-en' },
-      { op: 'set', path: ['searxngInstances'], value: ['https://searx.example.com'] },
-    ])
+  it('canonicalizes platform writes and trims text writes', () => {
+    expect(settingWrite('platforms', ['npm', 'github'])).toEqual({ field: 'platforms', value: ['github', 'npm'] })
+    expect(settingWrite('bingMarket', ' en-US ')).toEqual({ field: 'bingMarket', value: 'en-US' })
   })
 
-  it('ignores platform order and surrounding whitespace', () => {
-    const accepted = { ...DEFAULT_DRAFT, platforms: ['npm', 'github'], bingMarket: 'zh-CN' }
-    const draft = { ...DEFAULT_DRAFT, platforms: ['github' as const, 'npm' as const], bingMarket: ' zh-CN ' }
-    expect(draftOps(draft, accepted)).toEqual([])
-  })
-
-  it('sends an empty platform list when the user disables everything', () => {
-    const draft = { ...DEFAULT_DRAFT, platforms: [] }
-    expect(draftOps(draft, DEFAULT_DRAFT)).toEqual([{ op: 'set', path: ['platforms'], value: [] }])
+  it('forwards scalar writes unchanged', () => {
+    expect(settingWrite('provider', 'ddg')).toEqual({ field: 'provider', value: 'ddg' })
+    expect(settingWrite('cacheTtl', 0)).toEqual({ field: 'cacheTtl', value: 0 })
+    expect(settingWrite('searchEnhance', true)).toEqual({ field: 'searchEnhance', value: true })
   })
 })

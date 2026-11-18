@@ -28,8 +28,9 @@ carry compatibility branches for DSH 0.1.x, 0.2.0 or 0.2.1.
   Stack Overflow, Wikipedia and npm.
 - Three Agent tools, each forwarding cancellation and rendering text content
   blocks.
-- A native Plugins-page configuration form (en/zh) and the
-  `/thin-search-engine` popup command.
+- A native configuration card on the installed bundle's page
+  (Plugins → Installed → dsh-thin-search → Configuration), with en/zh copy, and
+  the `/thin-search-engine` popup command.
 - No HTTP bridge, no private configuration store and no profile patch writes;
   provider switches use ConfigForms and apply live.
 
@@ -105,7 +106,7 @@ bridge and a UI engine test control. Those surfaces are removed in v1.0.0.
 
 ## Configuration
 
-Every editable field is volatile and appears on the plugin row page. The schema
+Every editable field is volatile and appears on the installed bundle's configuration card. The schema
 is closed: exactly nine fields.
 
 | Field | Default | Description |
@@ -120,13 +121,15 @@ is closed: exactly nine fields.
 | `region` | empty | DuckDuckGo `kl` value, for example `cn-zh`. |
 | `searxngInstances` | empty | Absolute http(s) SearXNG base URLs; empty uses built-ins. |
 
-Edit them on **Plugins -> dsh-thin-search -> Configure**. The Host owns storage
-and persistence through ConfigForms; the page saves changed fields with one
-revision-fenced `mutate` and shows save/rejection state inline.
+Edit them in **Plugins → Installed → dsh-thin-search → Configuration**. This entry
+is the installed bundle's own configuration card; **there is no global Settings item for Thin Search**.
+The Host owns storage and persistence through ConfigForms; each control writes its
+field immediately with `ConfigForm.set`, and read-only or refused writes are
+reported inline.
 
 ## Provider switching
 
-The plugin row page has a **Search provider** card. It lists the providers the
+The installed bundle's configuration card has a **Search provider** group. It lists the providers the
 Host reports through `ctx.remote.web.listProviders()` and switches the global
 selection with `ctx.configForms.get("web").set("searchProvider", id)`. The write is
 accepted by the Host and applied live; no restart and no patch edit is needed.
@@ -261,10 +264,10 @@ tests, sources or temporary files.
 
 - The test suites do not call live search engines. They replay recorded HTML/JSON
   fixtures and stubbed HTTP responses; engine markup can change without warning.
-- The Client page was verified by unit/SSR/interaction tests and by loading the
-  built bundle through the ModuleLoader. The running DSH profile used to build
-  this release does not install the plugin, so no live GUI installation was
-  exercised here.
+- The installed-plugin configuration card was verified by unit/SSR/interaction
+  tests, the built-bundle ModuleLoader smoke and the integration harness. The
+  running DSH profile used to build this release does not install the plugin, so
+  the card was not exercised in a live DSH GUI.
 - GitHub, npm, Stack Exchange and Reddit expose changing rate limits; a CI run
   proves the code paths, not the availability of those public services.
 - CI runs Node 24.9 on Linux; other platforms are not part of the release gate.
@@ -278,8 +281,9 @@ MIT. See `LICENSE`.
 - v1.0.0 完全重构，只支持 DSH 0.2.2-rc.3 与 Node 24.9+。
 - 安装：`dsh plugin --profile web add dsh-thin-search`，重启 `dsh web`。补丁只设置
   `web.searchProvider` 与 `web.fetchProvider`。
-- 配置共 9 个字段，在“插件管理 -> dsh-thin-search -> 配置”页编辑；页面通过 ConfigForms
-  读写，保存时带 revision。
+- 配置共 9 个字段，在“插件 → 已安装 → dsh-thin-search → 配置”页编辑；该入口是
+  已安装插件详情页中的配置卡片，**没有全局设置项**。页面通过 ConfigForms 立即写入
+  单个字段，只读或写入被拒绝时会就地提示。
 - 全局搜索提供方通过 `configForms.get("web").set("searchProvider", id)` 切换，立即生效，
   不写 profile 补丁，无需重启。
 - 网络代理使用 DSH 全局策略：启动前设置 `HTTP_PROXY` / `HTTPS_PROXY`；插件没有

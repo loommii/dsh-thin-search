@@ -121,6 +121,10 @@ describe('release documentation', () => {
     expect(changelog).toContain('v1.0.1')
     expect(changelog).toContain('z.never()')
     expect(changelog).toContain('Delete the `cache` boolean; `cacheTtl` now also acts as the on/off switch')
+    expect(changelog).toContain('plugins.bundle.config')
+    expect(changelog).toContain('Plugins → Installed → dsh-thin-search → Configuration')
+    expect(changelog).toContain('F6')
+    expect(changelog).toContain('Live-GUI verification limitation')
   })
 
   it('documents install, configuration, provider switching, proxy, prompt file, platform limits, migration and verification limits', () => {
@@ -149,6 +153,11 @@ describe('release documentation', () => {
     expect(readme).toContain('@deepseek-ai/dsh-tool-executor-native')
     expect(readme).not.toMatch(/change it to `?native`?/u)
     expect(readme).toContain('request timeouts and 5xx responses retry once')
+    expect(readme).toContain('Plugins → Installed → dsh-thin-search → Configuration')
+    expect(readme).toContain('there is no global Settings item')
+    expect(readme).toContain('插件 → 已安装 → dsh-thin-search → 配置')
+    expect(readme).toContain('没有全局设置项')
+    expect(readme).not.toContain('Plugins -> dsh-thin-search -> Configure')
   })
 
   it('rewrites the commit style for this repository without stale external-project rules', () => {

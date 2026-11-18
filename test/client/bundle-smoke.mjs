@@ -26,6 +26,9 @@ vm.createContext(sandbox)
 vm.runInContext(source, sandbox)
 
 assert.equal(definition?.id, 'dsh-thin-search', 'the bundle must declare the package id')
+assert.ok(source.includes('plugins.bundle.config'), 'the bundle must register the bundle card slot')
+assert.ok(!source.includes('plugins.row.config'), 'the bundle must not register a row card')
+assert.ok(!source.includes('settings.section'), 'the bundle must not register a global settings section')
 const react = {
   useCallback: (fn) => fn,
   useEffect: () => {},
@@ -107,11 +110,12 @@ exports.apply(context)
 assert.deepEqual(plain(records.whileServed), [['thin-search']])
 assert.deepEqual(plain(records.dictionaries.map((entry) => entry.namespace)), ['thin-search'])
 assert.deepEqual(plain(records.registrations.map((entry) => entry.options)), [
-  { name: 'plugins.row.config', key: 'dsh-thin-search#thin-search' },
+  { name: 'plugins.bundle.config', key: 'dsh-thin-search', locale: 'thin-search' },
 ])
-const summary = records.registrations[0].component({ view: 'summary' })
-assert.equal(typeof summary, 'string', 'the summary view must render text')
-assert.ok(summary.length > 0)
+assert.equal(records.registrations.filter((entry) => entry.options.name === 'plugins.row.config').length, 0)
+assert.equal(records.registrations.filter((entry) => entry.options.name === 'settings.section').length, 0)
+const page = records.registrations[0].component({ view: 'page' })
+assert.ok(page !== null && typeof page === 'object', 'the bundle page view must render without owner form props')
 const command = records.commands[0]
 assert.equal(command.name, 'thin-search-engine')
 const options = await command.ui.options({}, new AbortController().signal)

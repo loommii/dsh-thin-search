@@ -1,15 +1,13 @@
 /**
- * Thin Search client configuration model: the fields the plugin row exposes,
- * their defaults, and the pure draft -> settings-operation mapping the page
- * saves through the owner form's `mutate`.
+ * Thin Search client configuration model: the fields the bundle settings card
+ * exposes, their defaults, and the per-field write mapping the ConfigForm
+ * receives. Every setting is a profile-scoped ConfigForms field.
  *
- * Nothing here talks to the Host: the page receives the accepted section from
- * `plugins.row.config` owner props and writes it back as path operations.
+ * Nothing here talks to the Host: the runtime holds
+ * `configForms.get('thin-search')` and writes one field at a time as the user
+ * picks a value.
  * @module dsh-thin-search/client/config
  */
-import type { SettingsPathOp } from './types'
-
-export type { SettingsPathOp } from './types'
 
 /** Settings namespace the plugin row declares in `cordis.patch.yml`. */
 export const THIN_SEARCH_NAMESPACE = 'thin-search'
@@ -17,11 +15,11 @@ export const THIN_SEARCH_NAMESPACE = 'thin-search'
 /** Settings namespace the web capability owns; its `searchProvider` selects the backend. */
 export const WEB_NAMESPACE = 'web'
 
-/** Slot a bundle's row configuration registers into. */
-export const ROW_CONFIG_SLOT = 'plugins.row.config'
+/** Slot a bundle's own configuration registers into on its bundle page. */
+export const BUNDLE_CONFIG_SLOT = 'plugins.bundle.config'
 
-/** Key joining this bundle's package name and the row id the patch declares. */
-export const ROW_CONFIG_KEY = 'dsh-thin-search#thin-search'
+/** The keyed slot key is the bundle package name. */
+export const BUNDLE_CONFIG_KEY = 'dsh-thin-search'
 
 /** Client command that switches the preferred free engine. */
 export const COMMAND_NAME = 'thin-search-engine'
@@ -31,9 +29,6 @@ export const LOCALE_NAMESPACE = 'thin-search'
 
 /** `web` settings field the global provider switch writes. */
 export const SEARCH_PROVIDER_FIELD = 'searchProvider'
-
-/** Thin Search settings field the preferred-engine switch writes. */
-export const ENGINE_FIELD = 'provider'
 
 /** Free engines in fallback order; the first one is the default. */
 export const ENGINE_IDS = ['bing', 'anysearch', 'searxng', 'ddg', 'ddg-lite'] as const
@@ -69,7 +64,7 @@ export function isPlatformId(value: unknown): value is PlatformId {
   return typeof value === 'string' && (PLATFORM_IDS as readonly string[]).includes(value)
 }
 
-/** The plugin row's accepted section as the client reads it. */
+/** The bundle settings section as the client reads it. */
 export interface ThinSearchValues {
   readonly provider?: string
   readonly platforms?: readonly string[]
@@ -200,64 +195,57 @@ export function normalizeDraft(value: unknown): Draft {
   }
 }
 
-/** Whether two ordered string lists carry the same entries. */
-function sameList(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((entry, index) => entry === right[index])
+/**
+ * Validate one field value before it reaches the Host. The card writes a
+ * single field at a time, so each write is checked on its own.
+ * @param field - draft field being written.
+ * @param value - proposed value.
+ * @returns the localized error key, or undefined when the value is usable.
+ */
+export function validateSetting(field: keyof Draft, value: unknown): DraftError | undefined {
+  if (field === 'cacheTtl') {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0
+      ? undefined
+      : { key: 'validation.cacheTtl' }
+  }
+  if (field === 'enhanceSystemPromptPath') {
+    const path = typeof value === 'string' ? value.trim() : ''
+    return path === '' || path.startsWith('~/') || path.startsWith('/')
+      ? undefined
+      : { key: 'validation.enhanceSystemPromptPath' }
+  }
+  if (field === 'searxngText') {
+    const { invalid } = parseSearxngInstances(typeof value === 'string' ? value : '')
+    return invalid.length === 0 ? undefined : { key: 'validation.searxng', params: { entries: invalid.join(', ') } }
+  }
+  return undefined
 }
 
-/** Validate the draft before it reaches the Host. */
-export function validateDraft(draft: Draft): DraftError[] {
-  const errors: DraftError[] = []
-  if (!Number.isInteger(draft.cacheTtl) || draft.cacheTtl < 0) errors.push({ key: 'validation.cacheTtl' })
-  const path = draft.enhanceSystemPromptPath.trim()
-  if (path !== '' && !path.startsWith('~/') && !path.startsWith('/')) {
-    errors.push({ key: 'validation.enhanceSystemPromptPath' })
-  }
-  const { invalid } = parseSearxngInstances(draft.searxngText)
-  if (invalid.length > 0) errors.push({ key: 'validation.searxng', params: { entries: invalid.join(', ') } })
-  return errors
+/** One Host field write produced from one draft field. */
+export interface SettingWrite {
+  /** Host ConfigForm field name. */
+  readonly field: string
+  /** Host ConfigForm value. */
+  readonly value: unknown
 }
 
 /**
- * Compare the draft with the accepted section and return only the writes that
- * changed. Fields compare in their normalized form so an untouched field never
- * produces a write.
+ * Map one card control write onto the ConfigForm field/value pair. The
+ * SearXNG textarea becomes the instance array; every other field keeps its
+ * own name. Text values are trimmed; platform ids are canonicalized.
+ * @param field - draft field being written.
+ * @param value - proposed value.
+ * @returns the Host field and value.
  */
-export function draftOps(draft: Draft, accepted: unknown): SettingsPathOp[] {
-  const base = normalizeDraft(accepted)
-  const ops: SettingsPathOp[] = []
-  if (draft.provider !== base.provider) {
-    ops.push({ op: 'set', path: [ENGINE_FIELD], value: draft.provider })
+export function settingWrite(field: keyof Draft, value: unknown): SettingWrite {
+  if (field === 'searxngText') {
+    return { field: 'searxngInstances', value: parseSearxngInstances(typeof value === 'string' ? value : '').instances }
   }
-  const platforms = canonicalPlatforms(draft.platforms)
-  if (!sameList(platforms, base.platforms)) {
-    ops.push({ op: 'set', path: ['platforms'], value: platforms })
+  if (field === 'platforms') {
+    return { field: 'platforms', value: canonicalPlatforms(Array.isArray(value) ? value as string[] : []) }
   }
-  if (draft.cacheTtl !== base.cacheTtl) {
-    ops.push({ op: 'set', path: ['cacheTtl'], value: draft.cacheTtl })
+  if (field === 'enhanceModel' || field === 'enhanceSystemPromptPath' || field === 'bingMarket' || field === 'region') {
+    return { field, value: typeof value === 'string' ? value.trim() : '' }
   }
-  if (draft.searchEnhance !== base.searchEnhance) {
-    ops.push({ op: 'set', path: ['searchEnhance'], value: draft.searchEnhance })
-  }
-  const model = draft.enhanceModel.trim()
-  if (model !== base.enhanceModel) {
-    ops.push({ op: 'set', path: ['enhanceModel'], value: model })
-  }
-  const promptPath = draft.enhanceSystemPromptPath.trim()
-  if (promptPath !== base.enhanceSystemPromptPath) {
-    ops.push({ op: 'set', path: ['enhanceSystemPromptPath'], value: promptPath })
-  }
-  const bingMarket = draft.bingMarket.trim()
-  if (bingMarket !== base.bingMarket) {
-    ops.push({ op: 'set', path: ['bingMarket'], value: bingMarket })
-  }
-  const region = draft.region.trim()
-  if (region !== base.region) {
-    ops.push({ op: 'set', path: ['region'], value: region })
-  }
-  const { instances } = parseSearxngInstances(draft.searxngText)
-  if (!sameList(instances, parseSearxngInstances(base.searxngText).instances)) {
-    ops.push({ op: 'set', path: ['searxngInstances'], value: instances })
-  }
-  return ops
+  return { field, value }
 }

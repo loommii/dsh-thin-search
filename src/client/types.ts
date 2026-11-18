@@ -77,20 +77,13 @@ export interface ConfigForm<T> {
   unset(field: string): Promise<boolean>
 }
 
-/** Page-owner form handoff for one `plugins.row.config` entry. */
-export interface ConfigPageForm {
-  /** Accepted Host values; refreshed by the page owner. */
-  readonly state: ConfigFormSnapshot<Record<string, unknown>>
-  /** Submit all field edits together with the revision the editor read. */
-  readonly mutate: ConfigForm<Record<string, unknown>>['mutate']
-}
-
-/** Owner props of a `plugins.row.config` contribution. */
-export interface PluginConfigViewProps {
-  /** `summary` renders the one-liner; `page` renders the form with its save control. */
-  readonly view: 'summary' | 'page'
-  /** Host-owned values and write action for this page's entry. */
-  readonly form?: ConfigPageForm | undefined
+/** Owner props of a `plugins.bundle.config` contribution. */
+export interface BundleConfigViewProps {
+  /**
+   * The bundle page asks for its configuration body. DSH 0.2.2-rc.3 passes
+   * no form props here; the card reads ConfigForms itself.
+   */
+  readonly view: 'page'
 }
 
 /** Translate function bound to one locale namespace. */
@@ -115,17 +108,19 @@ export interface LocaleService {
   resolveText(text: LocalizedText): string
 }
 
-/** A slot registration the page's row entry performs. */
-export interface RowConfigRegistration {
-  /** Slot name, `plugins.row.config`. */
+/** A slot registration a bundle configuration entry performs. */
+export interface BundleConfigRegistration {
+  /** Slot name, `plugins.bundle.config`. */
   readonly name: string
-  /** Entry key, `<package name>#<row id>`. */
+  /** Entry key, the bundle package name. */
   readonly key: string
+  /** Locale namespace whose dictionaries label the entry. */
+  readonly locale?: string
 }
 
 /** The keyed slot registry (`ctx.slots`). */
 export interface SlotService {
-  register(options: RowConfigRegistration, component: ComponentType<PluginConfigViewProps>): () => void
+  register(options: BundleConfigRegistration, component: ComponentType<BundleConfigViewProps>): () => void
   inject(slot: string, callback: () => () => void): () => void
 }
 

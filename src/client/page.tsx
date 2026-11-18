@@ -1,11 +1,12 @@
 /**
- * The Thin Search row page on the Plugins page.
+ * The Thin Search bundle settings card on the installed-plugin detail page.
  *
- * The page reads the accepted section from the owner form props and saves
- * every edit through the owner's `mutate`; the global provider card is the one
- * other surface, and it reads `web` through ConfigForms and switches with
- * `configForms.get('web').set('searchProvider', id)`. All copy comes from
- * `ctx.locale`; all controls are native and theme-token styled.
+ * DSH 0.2.2-rc.3 passes no owner form props to `plugins.bundle.config`, so the
+ * card subscribes to the runtime's ConfigForm store instead. Every control
+ * writes immediately (select on pick, switch on toggle, text on blur/Enter,
+ * Escape clears a draft); there is no Save/Discard footer. Layout follows
+ * dsh-context v0.85.1: grouped sections, label-left/control-right rows,
+ * 36px/18px pill selects, textarea clear affordances, and read-only notes.
  * @module dsh-thin-search/client/page
  */
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
@@ -13,43 +14,19 @@ import {
   ENGINE_IDS,
   PLATFORM_IDS,
   canonicalPlatforms,
-  draftOps,
   isEngineId,
-  normalizeDraft,
-  validateDraft,
-  type Draft,
-  type DraftError,
   type DraftErrorKey,
   type PlatformId,
 } from './config'
-import { describedBy, Field, Section, Switch } from './components'
+import { Group, Note, PillSelect, Row, SwitchRow, TextControl, type PillOption } from './components'
 import { engineLabelKey, platformLabelKey } from './locales'
-import { saveDraft } from './save'
 import type { ThinSearchRuntime } from './runtime'
-import type {
-  ConfigForm,
-  ConfigFormSnapshot,
-  ConfigPageForm,
-  PluginConfigViewProps,
-  WebProviderInfo,
-} from './types'
+import type { ConfigForm, ConfigFormSnapshot, WebProviderInfo } from './types'
 import type { ProviderDirectorySnapshot } from './provider-directory'
 
-/** Owner props plus the runtime the plugin's `apply` closes over. */
-export interface ThinSearchRowConfigProps extends PluginConfigViewProps {
+/** Props the bundle page wrapper supplies from the plugin's closure. */
+export interface ThinSearchBundleConfigProps {
   readonly runtime: ThinSearchRuntime
-}
-
-/** The page's save-state banner. */
-type SaveState = 'idle' | 'saved' | 'failed' | 'invalid'
-
-/**
- * The `plugins.row.config` component: the summary line for a row without a
- * package description, and the full page for `view: 'page'`.
- */
-export function ThinSearchRowConfig({ view, form, runtime }: ThinSearchRowConfigProps): ReactNode {
-  if (view === 'summary') return runtime.t('summary')
-  return <ThinSearchPage form={form} runtime={runtime} />
 }
 
 /** Subscribe one ConfigForm snapshot through React's external store. */
@@ -59,95 +36,20 @@ function useConfigFormSnapshot<T>(form: ConfigForm<T>): ConfigFormSnapshot<T> {
   return useSyncExternalStore(subscribe, snapshot, snapshot)
 }
 
-/** The page shell shared by the loading, unavailable, and ready branches. */
-function PageFrame({ runtime, busy, children }: {
-  readonly runtime: ThinSearchRuntime
-  readonly busy: boolean
-  readonly children: ReactNode
-}): ReactNode {
-  return (
-    <section className="dsts-page" aria-busy={busy}>
-      <header className="dsts-header">
-        <h2 className="dsts-title">{runtime.t('page.title')}</h2>
-        <p className="dsts-intro">{runtime.t('page.intro')}</p>
-      </header>
-      {children}
-    </section>
-  )
-}
-
-/** The page body. */
-function ThinSearchPage({ form, runtime }: {
-  readonly form: ConfigPageForm | undefined
-  readonly runtime: ThinSearchRuntime
-}): ReactNode {
+/** The bundle settings card. */
+export function ThinSearchBundleConfig({ runtime }: ThinSearchBundleConfigProps): ReactNode {
   const t = runtime.t
-  const state = form?.state
-  const [draft, setDraft] = useState<Draft>(() => normalizeDraft(state?.value))
-  const [syncedRevision, setSyncedRevision] = useState<number | undefined>(state?.revision)
-  const [fieldErrors, setFieldErrors] = useState<readonly DraftError[]>([])
-  const [saveState, setSaveState] = useState<SaveState>('idle')
-  const [saving, setSaving] = useState(false)
-  const [providerError, setProviderError] = useState(false)
-
+  const settings = useSyncExternalStore(runtime.subscribeSettings, runtime.getSettingsSnapshot, runtime.getSettingsSnapshot)
   const webState = useConfigFormSnapshot(runtime.webForm)
   const providers = useSyncExternalStore(runtime.subscribeProviders, runtime.getProvidersSnapshot, runtime.getProvidersSnapshot)
+  const [providerError, setProviderError] = useState(false)
 
   useEffect(() => { runtime.ensureProviders() }, [runtime])
 
-  // Adopt an accepted Host section after a save or an external edit.
-  useEffect(() => {
-    if (state?.revision === syncedRevision) return
-    setSyncedRevision(state?.revision)
-    setDraft(normalizeDraft(state?.value))
-    setFieldErrors([])
-    setSaveState('idle')
-  }, [state?.revision, state?.value, syncedRevision])
+  const fieldError = (key: DraftErrorKey): string | undefined =>
+    settings.error?.key === key ? t(settings.error.key, settings.error.params) : undefined
 
-  const editable = state?.status === 'ready' && state.writable && !saving
-  const dirty = draftOps(draft, state?.value).length > 0
-  const errorText = (key: DraftErrorKey): string | undefined => {
-    const error = fieldErrors.find((candidate) => candidate.key === key)
-    return error === undefined ? undefined : t(error.key, error.params)
-  }
-
-  const togglePlatform = (id: PlatformId): void => {
-    const selected = new Set(draft.platforms)
-    if (selected.has(id)) selected.delete(id)
-    else selected.add(id)
-    setDraft({ ...draft, platforms: canonicalPlatforms([...selected]) })
-  }
-
-  const discard = (): void => {
-    setDraft(normalizeDraft(state?.value))
-    setFieldErrors([])
-    setSaveState('idle')
-  }
-
-  const submit = async (): Promise<void> => {
-    if (form === undefined || !editable) return
-    const errors = validateDraft(draft)
-    if (errors.length > 0) {
-      setFieldErrors(errors)
-      setSaveState('invalid')
-      return
-    }
-    setSaving(true)
-    setSaveState('idle')
-    try {
-      const outcome = await saveDraft(form, draft)
-      setFieldErrors(outcome.errors)
-      setSaveState(
-        outcome.status === 'saved' || outcome.status === 'unchanged'
-          ? 'saved'
-          : outcome.status === 'invalid' ? 'invalid' : 'failed',
-      )
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const switchProvider = async (id: string): Promise<void> => {
+  const pickProvider = async (id: string): Promise<void> => {
     setProviderError(false)
     try {
       const accepted = await runtime.setSearchProvider(id)
@@ -157,291 +59,234 @@ function ThinSearchPage({ form, runtime }: {
     }
   }
 
-  const statusText = saveState === 'saved'
-    ? t('status.saved')
-    : saveState === 'failed'
-      ? t('status.saveFailed')
-      : saveState === 'invalid'
-        ? t('status.invalid')
-        : dirty
-          ? t('status.unsaved')
-          : ''
+  const togglePlatform = (id: PlatformId): void => {
+    const platforms = settings.values.platforms.includes(id)
+      ? settings.values.platforms.filter((candidate) => candidate !== id)
+      : canonicalPlatforms([...settings.values.platforms, id])
+    void runtime.writeSetting('platforms', platforms)
+  }
 
-  if (form === undefined || state === undefined) {
-    return (
-      <PageFrame runtime={runtime} busy={false}>
-        <p className="dsts-status" role="status">{t('status.unavailable')}</p>
-      </PageFrame>
-    )
-  }
-  if (state.status === 'loading') {
-    return (
-      <PageFrame runtime={runtime} busy>
-        <p className="dsts-status" role="status">{t('status.loading')}</p>
-      </PageFrame>
-    )
-  }
-  if (state.status === 'unavailable') {
-    return (
-      <PageFrame runtime={runtime} busy={false}>
-        <p className="dsts-status" role="status">{t('status.unavailable')}</p>
-      </PageFrame>
-    )
+  const commitCacheTtl = (text: string): void => {
+    const trimmed = text.trim()
+    const value = trimmed === '' ? Number.NaN : Number(trimmed)
+    void runtime.writeSetting('cacheTtl', value)
   }
 
   return (
-    <PageFrame runtime={runtime} busy={saving}>
-      {state.writable ? null : <p className="dsts-status">{t('status.readOnly')}</p>}
+    <div className="dsts-settings-prefs">
+      {settings.status === 'loading' ? <Note role="status">{t('status.loading')}</Note> : null}
+      {settings.status === 'unavailable' ? <Note role="status">{t('status.unavailable')}</Note> : null}
+      {settings.status === 'ready' && !settings.writable ? <Note role="status">{t('status.readOnly')}</Note> : null}
+      {settings.writeFailed ? <Note role="alert" error>{t('status.writeFailed')}</Note> : null}
 
-      <ProviderCard
-        runtime={runtime}
-        webState={webState}
-        providers={providers}
-        providerError={providerError}
-        onSelect={(id) => { void switchProvider(id) }}
-        onRetry={() => { void runtime.refreshProviders() }}
-      />
-
-      <Section title={t('engine.title')} description={t('engine.description')}>
-        <Field id="dsts-engine" label={t('engine.label')} hint={t('engine.hint')}>
-          <select
-            id="dsts-engine"
-            data-control="engine"
-            className="dsts-select"
-            value={draft.provider}
-            disabled={!editable}
-            aria-describedby={describedBy('dsts-engine', t('engine.hint'), undefined)}
-            onChange={(event) => {
-              const next = event.currentTarget.value
-              if (isEngineId(next)) setDraft({ ...draft, provider: next })
-            }}
-          >
-            {ENGINE_IDS.map((id) => <option key={id} value={id}>{t(engineLabelKey(id))}</option>)}
-          </select>
-        </Field>
-      </Section>
-
-      <Section title={t('enhance.title')} description={t('enhance.description')}>
-        <Switch
-          id="dsts-enhance"
-          control="enhance"
-          label={t('enhance.toggle')}
-          hint={t('enhance.hint')}
-          checked={draft.searchEnhance}
-          disabled={!editable}
-          onToggle={(next) => { setDraft({ ...draft, searchEnhance: next }) }}
-        />
-        <Field id="dsts-enhance-model" label={t('enhance.modelLabel')} hint={t('enhance.modelHint')}>
-          <input
-            id="dsts-enhance-model"
-            data-control="enhance-model"
-            className="dsts-input"
-            type="text"
-            value={draft.enhanceModel}
-            placeholder={t('enhance.modelPlaceholder')}
-            disabled={!editable || !draft.searchEnhance}
-            aria-describedby={describedBy('dsts-enhance-model', t('enhance.modelHint'), undefined)}
-            onChange={(event) => { setDraft({ ...draft, enhanceModel: event.currentTarget.value }) }}
+      {settings.status === 'ready' ? (
+        <>
+          <ProviderGroup
+            runtime={runtime}
+            webState={webState}
+            providers={providers}
+            error={providerError}
+            onPick={(id) => { void pickProvider(id) }}
+            onRetry={() => { void runtime.refreshProviders() }}
           />
-        </Field>
-        <Field
-          id="dsts-enhance-prompt"
-          label={t('enhance.promptPathLabel')}
-          hint={t('enhance.promptPathHint')}
-          error={errorText('validation.enhanceSystemPromptPath')}
-        >
-          <input
-            id="dsts-enhance-prompt"
-            data-control="enhance-prompt-path"
-            className="dsts-input"
-            type="text"
-            value={draft.enhanceSystemPromptPath}
-            placeholder={t('enhance.promptPathPlaceholder')}
-            disabled={!editable || !draft.searchEnhance}
-            aria-describedby={describedBy('dsts-enhance-prompt', t('enhance.promptPathHint'), errorText('validation.enhanceSystemPromptPath'))}
-            onChange={(event) => { setDraft({ ...draft, enhanceSystemPromptPath: event.currentTarget.value }) }}
-          />
-        </Field>
-      </Section>
 
-      <Section title={t('platforms.title')} description={t('platforms.description')}>
-        <fieldset className="dsts-platforms" disabled={!editable}>
-          <legend className="dsts-legend">{t('platforms.legend')}</legend>
-          {PLATFORM_IDS.map((id) => (
-            <label className="dsts-platform" key={id} htmlFor={`dsts-platform-${id}`}>
-              <input
-                id={`dsts-platform-${id}`}
-                data-control="platforms"
-                type="checkbox"
-                checked={draft.platforms.includes(id)}
-                disabled={!editable}
-                onChange={() => { togglePlatform(id) }}
+          <Group title={t('engine.title')}>
+            <Note>{t('engine.description')}</Note>
+            <Row label={t('engine.label')} labelId="dsts-engine-label">
+              <PillSelect
+                id="dsts-engine"
+                control="engine"
+                label={t('engine.label')}
+                value={settings.values.provider}
+                options={ENGINE_IDS.map((id): PillOption => ({ id, label: t(engineLabelKey(id)) }))}
+                disabled={!settings.writable}
+                describedBy="dsts-engine-hint"
+                onChange={(id) => { if (isEngineId(id)) void runtime.writeSetting('provider', id) }}
               />
-              {t(platformLabelKey(id))}
-            </label>
-          ))}
-        </fieldset>
-        <p className="dsts-hint">{draft.platforms.length === 0 ? t('platforms.allDisabled') : t('platforms.hint')}</p>
-      </Section>
+            </Row>
+            <Note id="dsts-engine-hint">{t('engine.hint')}</Note>
+          </Group>
 
-      <Section title={t('advanced.title')} description={t('advanced.description')}>
-        <Field
-          id="dsts-cache-ttl"
-          label={t('advanced.cacheLabel')}
-          hint={t('advanced.cacheHint')}
-          error={errorText('validation.cacheTtl')}
-        >
-          <input
-            id="dsts-cache-ttl"
-            data-control="cache-ttl"
-            className="dsts-input"
-            type="number"
-            min={0}
-            step={1}
-            value={draft.cacheTtl}
-            disabled={!editable}
-            aria-describedby={describedBy('dsts-cache-ttl', t('advanced.cacheHint'), errorText('validation.cacheTtl'))}
-            onChange={(event) => {
-              const next = Number(event.currentTarget.value)
-              setDraft({ ...draft, cacheTtl: Number.isFinite(next) ? next : 0 })
-            }}
-          />
-        </Field>
-        <Field id="dsts-bing-market" label={t('advanced.bingMarketLabel')} hint={t('advanced.bingMarketHint')}>
-          <input
-            id="dsts-bing-market"
-            data-control="bing-market"
-            className="dsts-input"
-            type="text"
-            value={draft.bingMarket}
-            disabled={!editable}
-            aria-describedby={describedBy('dsts-bing-market', t('advanced.bingMarketHint'), undefined)}
-            onChange={(event) => { setDraft({ ...draft, bingMarket: event.currentTarget.value }) }}
-          />
-        </Field>
-        <Field id="dsts-region" label={t('advanced.regionLabel')} hint={t('advanced.regionHint')}>
-          <input
-            id="dsts-region"
-            data-control="region"
-            className="dsts-input"
-            type="text"
-            value={draft.region}
-            disabled={!editable}
-            aria-describedby={describedBy('dsts-region', t('advanced.regionHint'), undefined)}
-            onChange={(event) => { setDraft({ ...draft, region: event.currentTarget.value }) }}
-          />
-        </Field>
-        <Field
-          id="dsts-searxng"
-          label={t('advanced.searxngLabel')}
-          hint={t('advanced.searxngHint')}
-          error={errorText('validation.searxng')}
-        >
-          <textarea
-            id="dsts-searxng"
-            data-control="searxng-instances"
-            className="dsts-textarea"
-            rows={3}
-            value={draft.searxngText}
-            placeholder={t('advanced.searxngPlaceholder')}
-            disabled={!editable}
-            aria-describedby={describedBy('dsts-searxng', t('advanced.searxngHint'), errorText('validation.searxng'))}
-            onChange={(event) => { setDraft({ ...draft, searxngText: event.currentTarget.value }) }}
-          />
-        </Field>
-      </Section>
+          <Group title={t('enhance.title')}>
+            <Note>{t('enhance.description')}</Note>
+            <SwitchRow
+              id="dsts-enhance"
+              control="enhance"
+              label={t('enhance.toggle')}
+              checked={settings.values.searchEnhance}
+              disabled={!settings.writable}
+              onChange={(next) => { void runtime.writeSetting('searchEnhance', next) }}
+            />
+            <Note>{t('enhance.hint')}</Note>
+            <TextControl
+              id="dsts-enhance-model"
+              control="enhance-model"
+              label={t('enhance.modelLabel')}
+              value={settings.values.enhanceModel}
+              disabled={!settings.writable}
+              placeholder={t('enhance.modelPlaceholder')}
+              hint={t('enhance.modelHint')}
+              clearLabel={t('settings.clear')}
+              commit={(value) => { void runtime.writeSetting('enhanceModel', value) }}
+            />
+            <TextControl
+              id="dsts-enhance-prompt"
+              control="enhance-prompt-path"
+              label={t('enhance.promptPathLabel')}
+              value={settings.values.enhanceSystemPromptPath}
+              disabled={!settings.writable}
+              placeholder={t('enhance.promptPathPlaceholder')}
+              hint={t('enhance.promptPathHint')}
+              error={fieldError('validation.enhanceSystemPromptPath')}
+              clearLabel={t('settings.clear')}
+              commit={(value) => { void runtime.writeSetting('enhanceSystemPromptPath', value) }}
+            />
+          </Group>
 
-      <footer className="dsts-footer">
-        <div className="dsts-actions">
-          <button
-            type="button"
-            className="dsts-btn dsts-btnOutline"
-            data-control="discard"
-            disabled={!editable || !dirty}
-            onClick={discard}
-          >
-            {t('actions.discard')}
-          </button>
-          <button
-            type="button"
-            className="dsts-btn dsts-btnPrimary"
-            data-control="save"
-            disabled={!editable || !dirty}
-            onClick={() => { void submit() }}
-          >
-            {saving ? t('status.saving') : t('actions.save')}
-          </button>
-        </div>
-        <p className="dsts-status" role="status" aria-live="polite">{statusText}</p>
-      </footer>
-    </PageFrame>
+          <Group title={t('platforms.title')}>
+            <fieldset className="dsts-settings-platforms" disabled={!settings.writable}>
+              <legend className="dsts-settings-legend">{t('platforms.legend')}</legend>
+              <div className="dsts-settings-chips">
+                {PLATFORM_IDS.map((id) => {
+                  const enabled = settings.values.platforms.includes(id)
+                  return (
+                    <label
+                      className={enabled ? 'dsts-settings-chip dsts-settings-chip-on' : 'dsts-settings-chip'}
+                      key={id}
+                      htmlFor={`dsts-platform-${id}`}
+                    >
+                      <input
+                        id={`dsts-platform-${id}`}
+                        data-control="platforms"
+                        type="checkbox"
+                        checked={enabled}
+                        disabled={!settings.writable}
+                        onChange={() => { togglePlatform(id) }}
+                      />
+                      <span>{t(platformLabelKey(id))}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </fieldset>
+            <Note>{settings.values.platforms.length === 0 ? t('platforms.allDisabled') : t('platforms.hint')}</Note>
+          </Group>
+
+          <Group title={t('advanced.title')}>
+            <Note>{t('advanced.description')}</Note>
+            <TextControl
+              id="dsts-cache-ttl"
+              control="cache-ttl"
+              label={t('advanced.cacheLabel')}
+              value={String(settings.values.cacheTtl)}
+              disabled={!settings.writable}
+              inputMode="numeric"
+              hint={t('advanced.cacheHint')}
+              error={fieldError('validation.cacheTtl')}
+              clearLabel={t('settings.clear')}
+              commit={commitCacheTtl}
+            />
+            <TextControl
+              id="dsts-bing-market"
+              control="bing-market"
+              label={t('advanced.bingMarketLabel')}
+              value={settings.values.bingMarket}
+              disabled={!settings.writable}
+              hint={t('advanced.bingMarketHint')}
+              clearLabel={t('settings.clear')}
+              commit={(value) => { void runtime.writeSetting('bingMarket', value) }}
+            />
+            <TextControl
+              id="dsts-region"
+              control="region"
+              label={t('advanced.regionLabel')}
+              value={settings.values.region}
+              disabled={!settings.writable}
+              hint={t('advanced.regionHint')}
+              clearLabel={t('settings.clear')}
+              commit={(value) => { void runtime.writeSetting('region', value) }}
+            />
+            <TextControl
+              id="dsts-searxng"
+              control="searxng-instances"
+              label={t('advanced.searxngLabel')}
+              value={settings.values.searxngText}
+              disabled={!settings.writable}
+              multiline
+              rows={Math.min(8, Math.max(2, settings.values.searxngText.split('\n').length))}
+              placeholder={t('advanced.searxngPlaceholder')}
+              hint={t('advanced.searxngHint')}
+              error={fieldError('validation.searxng')}
+              clearLabel={t('settings.clear')}
+              commit={(value) => { void runtime.writeSetting('searxngText', value) }}
+            />
+          </Group>
+        </>
+      ) : null}
+    </div>
   )
 }
 
-/** The global provider card: lists the Host's registered search providers. */
-function ProviderCard({ runtime, webState, providers, providerError, onSelect, onRetry }: {
+/** The global provider group: Host providers plus the ConfigForms write. */
+function ProviderGroup({ runtime, webState, providers, error, onPick, onRetry }: {
   readonly runtime: ThinSearchRuntime
   readonly webState: ConfigFormSnapshot<{ readonly searchProvider?: string; readonly fetchProvider?: string }>
   readonly providers: ProviderDirectorySnapshot
-  readonly providerError: boolean
-  readonly onSelect: (id: string) => void
+  readonly error: boolean
+  readonly onPick: (id: string) => void
   readonly onRetry: () => void
 }): ReactNode {
   const t = runtime.t
   const list = providers.providers
   const selected = webState.value?.searchProvider ?? ''
   const selectedInfo: WebProviderInfo | undefined = list.find((provider) => provider.id === selected)
-  const missing = selected !== '' && selectedInfo === undefined
   const loading = providers.status === 'loading' && list.length === 0
+  const options: PillOption[] = list.map((provider) => ({ id: provider.id, label: provider.title ?? provider.id }))
+  if (selected !== '' && selectedInfo === undefined) {
+    options.push({ id: selected, label: t('provider.missingOption', { id: selected }) })
+  }
+  const describedBy = error ? 'dsts-provider-hint dsts-provider-error' : 'dsts-provider-hint'
   return (
-    <Section title={t('provider.title')} description={t('provider.description')}>
-      {providers.status === 'error' ? (
-        <div className="dsts-inlineAlert">
-          <p className="dsts-error" role="alert">{t('provider.error')}</p>
-          <button type="button" className="dsts-btn dsts-btnOutline" data-control="provider-retry" onClick={onRetry}>
-            {t('provider.retry')}
-          </button>
-        </div>
-      ) : null}
+    <Group title={t('provider.title')}>
       {webState.status === 'unavailable' ? (
-        <p className="dsts-status">{t('provider.unavailable')}</p>
+        <Note role="status">{t('provider.unavailable')}</Note>
       ) : (
-        <Field
-          id="dsts-provider"
-          label={t('provider.label')}
-          hint={t('provider.hint')}
-          error={providerError ? t('provider.switchFailed') : undefined}
-        >
-          <select
-            id="dsts-provider"
-            data-control="provider"
-            className="dsts-select"
-            value={selected}
-            disabled={webState.status !== 'ready' || !webState.writable || loading}
-            aria-describedby={describedBy('dsts-provider', t('provider.hint'), providerError ? t('provider.switchFailed') : undefined)}
-            onChange={(event) => { onSelect(event.currentTarget.value) }}
-          >
-            {selected === '' ? <option value="" disabled>{t('provider.none')}</option> : null}
-            {list.map((provider) => (
-              <option key={provider.id} value={provider.id}>{provider.title ?? provider.id}</option>
-            ))}
-            {missing ? <option value={selected}>{t('provider.missingOption', { id: selected })}</option> : null}
-          </select>
-        </Field>
-      )}
-      {loading ? <p className="dsts-status" role="status">{t('provider.loading')}</p> : null}
-      {webState.status === 'unavailable' || selectedInfo === undefined || selectedInfo.description === undefined
-        ? null
-        : <p className="dsts-hint">{runtime.resolveText(selectedInfo.description)}</p>}
-      {webState.status === 'unavailable'
-        ? null
-        : (
-          <p className="dsts-hint">
+        <>
+          <Note>{t('provider.description')}</Note>
+          <Row label={t('provider.label')} labelId="dsts-provider-label">
+            <PillSelect
+              id="dsts-provider"
+              control="provider"
+              label={t('provider.label')}
+              value={selected}
+              options={options}
+              placeholder={t('provider.none')}
+              disabled={webState.status !== 'ready' || !webState.writable || loading || providers.status === 'error'}
+              describedBy={describedBy}
+              onChange={onPick}
+            />
+          </Row>
+          <Note id="dsts-provider-hint">{t('provider.hint')}</Note>
+          {loading ? <Note role="status">{t('provider.loading')}</Note> : null}
+          {providers.status === 'error' ? (
+            <Note role="alert" error>
+              {t('provider.error')}{' '}
+              <button type="button" className="dsts-settings-inline-action" data-control="provider-retry" onClick={onRetry}>
+                {t('provider.retry')}
+              </button>
+            </Note>
+          ) : null}
+          {selectedInfo?.description === undefined
+            ? null
+            : <Note>{runtime.resolveText(selectedInfo.description)}</Note>}
+          <Note>
             {t('provider.current', {
               name: selectedInfo?.title ?? (selected === '' ? t('provider.none') : selected),
             })}
-          </p>
-        )}
-    </Section>
+          </Note>
+          {error ? <Note id="dsts-provider-error" role="alert" error>{t('provider.switchFailed')}</Note> : null}
+        </>
+      )}
+    </Group>
   )
 }
