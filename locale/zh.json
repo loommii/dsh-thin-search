@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "免费网页搜索",
-    "description": "零成本免密钥网页搜索：Bing / DuckDuckGo / SearXNG / AnySearch，自动回退、平台搜索与 web_fetch。"
+    "title": "Thin Search",
+    "description": "面向 DeepSeekRuntime 0.2.2-rc.3 的免费免密钥网页搜索：Bing、AnySearch、SearXNG 与 DuckDuckGo 自动回退，结果缓存、可选模型增强、8 个平台适配器与 3 个 Agent 工具。"
   }
 }

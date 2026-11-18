@@ -1,306 +1,294 @@
 # dsh-thin-search
 
-[![node](https://img.shields.io/badge/node-%E2%89%A522.19-339933)](package.json)
-[![dsh](https://img.shields.io/badge/dsh-0.1.7%E2%80%930.2.1-4c8dff)](https://github.com/deepseek-ai/deepseek-harness)
-[![dsh-plugin](https://img.shields.io/badge/dsh--plugin-blue)](https://github.com/deepseek-ai/deepseek-harness)
-
-**DeepSeek Harness 免费搜索插件 —— 零成本、零 API key、零模型调用。**
-
-DSH 官方网页搜索强制依赖 DeepSeek V4 Flash 模型（Anthropic 格式），每次搜索都消耗一次模型调用。本插件用纯 HTTP 抓取免费搜索引擎（Bing / DuckDuckGo / SearXNG / AnySearch），**不调用任何模型、不需要任何 API key**，任何第三方网关/中转用户都能直接联网搜索。
-
-[中文](#中文) · [English](#english)
-
----
-
-## 中文
-
-### 为什么需要它
-
-DSH 官方自带的网页搜索插件（`dsh-web-search-deepseek`）会强制调用 DeepSeek V4 Flash 模型，并以 Anthropic 格式（`/anthropic/v1/messages` + `web_search_20250305` 工具）发起请求：
-
-- 使用第三方 DeepSeek V4 Flash 网关时，对方不一定提供 Anthropic 协议，搜索直接不可用；
-- 即使可用，每次搜索都会消耗一次模型调用，需要额外付费。
-
-**本插件用普通 HTTP 抓取免费搜索引擎，完全不调用模型，任何网络环境都能用，搜索本身零成本。**
-
-### 功能一览
-
-| 功能 | 说明 |
-|---|---|
-| 🆓 **零成本搜索** | 全部引擎免费、无需 API key、无需注册 |
-| 🚫 **零模型调用** | 只发普通 HTTP 请求，不消耗任何 token，不依赖 Anthropic 协议 |
-| 🔁 **自动回退** | 任一引擎失败（限流/反爬/网络错误/0 结果）自动尝试下一个，结果注明实际生效引擎 |
-| 🌐 **多引擎** | AnySearch（默认）/ Bing / DuckDuckGo / SearXNG，支持自定义 SearXNG 实例 |
-| ⚙️ **插件配置页** | 插件管理 → `dsh-thin-search` → **配置**：引擎选择、官方搜索切换、增强开关、平台开关、缓存时长 |
-| 💬 **弹出式切换** | 聊天框输入 `/thin-search-engine`，点选即切换引擎 |
-| 🧪 **引擎测试** | `free_search_test` 工具 + 插件配置页"测试引擎"按钮 |
-| 🕒 **时效** | 按时间范围限定搜索结果，如「最近一周的新闻」 |
-| 🔎 **平台搜索** | `platform_search`：GitHub / V2EX / Bilibili / Reddit / Hacker News / Stack Overflow / Wikipedia / npm（公开 API，零 key） |
-| 🧠 **搜索增强** | 可选（默认关）：LLM 把口语化输入规范化为搜索关键词，改善中文问句效果；⚠️ 开启后消耗 Token；支持自定义提示词 |
-| 🚀 **网络代理** | 内置 HTTP/HTTPS 代理（undici ProxyAgent），仅本插件生效，不污染 DSH 全局 |
-| 📦 **结果缓存** | LRU 50 条，TTL 0-5 分钟可配，防免费引擎限流 |
-| 🤝 **干净集成** | 实现官方 `WebSearchProvider` seam，与官方插件共存，patch 自动接管 `web.searchProvider` |
-
-### 引擎
-
-| id | 引擎 | 说明 |
-|---|---|---|
-| `anysearch` | AnySearch AI | **默认引擎**，对中文自然语言问句理解最好，免费无 key |
-| `bing` | Bing | 免费，速度快，中文优化（`bingMarket: zh-CN`） |
-| `searxng` | SearXNG 元搜索 | 免费，多个公开实例自动切换，支持自定义实例 |
-| `ddg` | DuckDuckGo HTML | 免费，共享 IP 上可能限流（自动回退） |
-| `ddg-lite` | DuckDuckGo Lite | 免费，同上 |
-
-### 安装
-
-```sh
-# 从 npm 安装（发布后）
-dsh plugin --profile web add dsh-thin-search
-
-# 或从 GitHub 安装
-dsh plugin --profile web add github:loommii/dsh-thin-search
-
-# 或本地源码（开发/自用）
-git clone git@github.com:loommii/dsh-thin-search.git
-dsh plugin --profile web add /path/to/dsh-thin-search
-```
-
-安装后**重启 `dsh web`** 生效。插件通过 patch 自动把 `web.searchProvider` 指向本插件，无需手动配置。
-
-#### 卸载
-
-```sh
-dsh plugin --profile web remove dsh-thin-search
-```
-
-卸载后**重启 `dsh web`**，即可恢复 DSH 官方默认搜索。
-
-> 依赖说明：`@deepseek-ai/dsh-atomic-write`、`dsh-llm`、`dsh-settings`、`dsh-tools`、`dsh-web` 均使用 `peerDependencies`，DSH 运行时必须使用安装树中的唯一实例。请用 `dsh plugin --profile <profile> add ...` 安装，不要把 DSH 核心包复制进 profile 的本地 `node_modules`。
-
-### 快速开始
-
-安装重启后，在任意会话直接对 agent 说"帮我搜索……"即可 —— 默认引擎 AnySearch，开箱即用。
-
-### 使用
-
-#### 插件配置页（推荐）
-
-打开 **插件管理 → `dsh-thin-search` → 配置**（DSH 0.1.7 起插件配置统一挂在插件管理页）：
-
-- **搜索提供方**：免费引擎（默认）/ 官方 DeepSeek 搜索 —— 切换会写 profile 的 `cordis.patch.yml`，**重启 DSH 后生效**（页面会提示）
-- **搜索引擎**：下拉框切换，保存即生效（默认 `anysearch`）
-- **搜索增强**：**默认关闭**。开启后会用 LLM 把口语化输入规范化为搜索关键词（如「今天美元兑换日元的汇率多少？」→「美元 日元 汇率」），改善 Bing 等引擎对中文问句的效果。⚠️ **开启后每次搜索会消耗 Token**；关闭则完全免费、零模型调用。支持自定义增强系统提示词：在"搜索增强"卡片中，文本框始终显示当前实际生效的提示词（内置默认或自定义），可直接编辑；"恢复默认"按钮会覆盖为内置默认提示词
-- **增强模型**：可选指定用于搜索增强的 LLM 模型（下拉列出 DSH 中已配置的全部模型）。留空 = 跟随 DSH 默认模型；指定模型失败时自动回退默认模型
-- **网络代理**：可选填 HTTP/HTTPS 代理地址（如 `http://127.0.0.1:7890`），用于访问需要外网的引擎。V2Ray / Clash 需开启 HTTP 端口；不支持 SOCKS5。留空 = 直连，保存即生效
-- **平台搜索**：勾选启用的平台（`platform_search` 工具按此过滤）
-- **结果缓存时长**：0 关闭缓存，1-5 分钟
-- **测试引擎**：直测当前引擎可用性
-
-
-#### 聊天框切换引擎（/thin-search-engine）
-
-输入 `/thin-search-engine` 弹出引擎选择窗口（和 `/model` 一样的交互），点选即切换，当前引擎会标记出来。命令只改首选引擎，搜索仍走自动回退链。
-
-#### 配置文件（`~/.dsh/profiles/<profile>/cordis.patch.yml`）
-
-DSH 0.1.7 起，用户设置直接持久化到当前 profile 的 `cordis.patch.yml`。手工配置时使用 `thin-search` 条目：
-
-```yaml
-- id: thin-search
-  name: dsh-thin-search
-  config:
-    provider: anysearch        # anysearch / bing / ddg / ddg-lite / searxng
-    searchEnhance: false        # 搜索增强：LLM 规范化搜索词（默认关，开启消耗 Token）
-    enhanceModel: ""            # 增强模型 "provider:model"；空 = 跟随 DSH 默认模型
-    proxy: ""                   # HTTP/HTTPS 代理，如 http://127.0.0.1:7890；空 = 直连
-    bingMarket: zh-CN           # Bing 市场
-    region: cn-zh               # DuckDuckGo 区域（可选）
-    searxngInstances:           # 自定义 SearXNG 实例（可选）
-      - https://your-instance.example
-    platforms:                  # platform_search 启用列表
-      - github
-      - v2ex
-      - bilibili
-      - reddit
-      - hn
-      - stackoverflow
-      - wikipedia
-      - npm
-    cacheTtl: 5                 # 结果缓存分钟数（0-5）
-```
-
-### 网络代理（国内用户）
-
-Bing / AnySearch 在多数网络环境可直接访问；DuckDuckGo / SearXNG / GitHub 等可能需要代理。本插件内置 HTTP/HTTPS 代理支持（基于 undici `ProxyAgent`），**无需设置系统环境变量**：
-
-- **插件管理 → `dsh-thin-search` → 配置 → 网络代理**：填 `http://127.0.0.1:7890`（V2Ray / Clash 的 HTTP 端口），保存即生效，无需重启
-- 或直接写 `~/.dsh/profiles/<profile>/cordis.patch.yml` 中 `thin-search.config.proxy`
-- 留空 = 直连
-
-**作用域**：代理只作用于本插件的 11 处引擎请求，不设置全局 dispatcher、不修改 DSH 全局 fetch，其他插件和 DSH 本身不受影响。
-
-> ⚠️ **已知限制**：DuckDuckGo 对代理/数据中心出口 IP 有反爬（HTTP 202 风控页），公共 SearXNG 实例对代理 IP 普遍限流（HTTP 429）。代理场景下推荐 **Bing / AnySearch**（实测稳定）。如自建 SearXNG 实例，填入 `searxngInstances` 即可。
-
-### 工具
-
-#### free_search_test
-
-对 agent 说"测试一下所有搜索引擎"，它会调用 `free_search_test` 工具并报告：
-
-```
-Search engine test:
-- bing: OK (3 results, e.g. "DeepSeek Harness developer preview: Everything is a plugin")
-- anysearch: OK (3 results, ...)
-- ddg: FAIL - DuckDuckGo anti-bot challenge (HTTP 202): DDG blocks datacenter/proxy egress IPs. Try Bing instead.
-```
-
-#### 时效（advanced_search）
-
-对 agent 说「最近一周的新闻」「最近 3 天的消息」，搜索即自动限定在对应时间段，返回较新的结果。
-
-| 形式 | 示例 | 含义 |
-|---|---|---|
-| 固定档 | `day` / `week` / `month` / `year` | 1 / 7 / 30 / 365 天 |
-| 自定义相对值 | `12h`、`3d`、`2mo`、`1y` | 最近 N 小时/天/月/年 |
-| 绝对日期 | `2026-07-01` | 该日期（含）之后发布的结果 |
-
-实现上，支持时间范围的引擎（SearXNG / DDG / DDG Lite）会把天数映射到最近似档位（`≤2 天 → day`，`≤14 天 → week`，`≤90 天 → month`，否则 `year`）；Bing / AnySearch 无对应参数会忽略。带 `timeRange` 时支持时间范围的引擎自动排到回退链前面。
-
-#### platform_search（平台搜索）
-
-`platform_search` 支持 GitHub / V2EX / Bilibili / Reddit / Hacker News / Stack Overflow / Wikipedia / npm，全部走公开 API（零 key）。可在插件配置页勾选启用哪些平台。
-
-### 工作原理
-
-- `lib/index.js`（host 端）：实现 `WebSearchProvider`（`id: thin-search` / `available()` / `search()`），统一引擎路由 + 自动回退 + 时间过滤解析 + 结果缓存；以 `thin-search` profile entry 接入 DSH 0.1.7 Settings；提供 `/api/dsh-thin-search-settings` 读写桥（describe / mutate / raw-search，仅限 loopback）；注册 `free_search_test`、`platform_search`、`advanced_search` 工具；动态注入引擎清单到系统提示词
-- `lib/client.js`（浏览器端）：React 配置页（挂 `plugins.row.config` 插槽，key `dsh-thin-search#thin-search`，由 `ctx.configForms.whileServed` 守卫）+ `/thin-search-engine` 弹出式命令（`commandUi` popupSelect）
-- `lib/proxy.js`：undici `ProxyAgent` 封装，单例缓存 + `fetchWithProxy`，仅本插件使用
-- `cordis.patch.yml`：插件 loader 配置，patch 同时把 `web.searchProvider` 设为 `thin-search`（保留 `fetchProvider: http`）
-
-### 兼容性
-
-| 项目 | 要求 |
-|---|---|
-| DSH | `>= 0.1.7-rc.1 < 0.3.0-0`（即 0.1.7–0.2.x，含预发布；依赖 `@deepseek-ai/dsh-atomic-write` / `dsh-settings` / `dsh-tools` / `dsh-web` / `dsh-llm` 同区间）；已在 **0.1.7-rc.1 / 0.2.0-rc.2 / 0.2.1-rc.2** 实测 |
-| Node.js | `>= 22.19.0` |
-
-> **DSH 0.2.1 适配（v0.6.0）**：
-> - `dsh-web` 0.2.1 删除了 `WebRuntime.searchProviderId` 实例字段，改为每次搜索读 `config.searchProvider`（volatile 引用）。插件不再写该字段（写它只会生成无效自有属性），改为只读 `config.searchProvider.get()`，并在 `searchProvider` 未配置时输出一条可操作警告。
-> - **引擎模式切换**：0.2.1 起 `web.searchProvider` / `web.fetchProvider` 是 volatile 字段，插件直接走 `SettingsForms.mutate("web", …)` 改写官方 web entry —— 与官方「网页搜索设置」页共用同一份权威配置，切换**立即生效**且冲突可见；0.1.7–0.2.0 的 web 字段不是 volatile，自动回退到 profile patch 托管块（重启生效）。
-> - 官方 0.2.1-rc.2 新增的「网页搜索设置」开关（DeepSeek Search / Fetch API）会写同一个 `web.searchProvider`，两者以**最后保存者**为准；插件配置页会显示当前生效的 provider id。
-> - 若部署配置里显式写了 `tools: { mode: both }`，0.2.1 会拒绝（`both` 已移除）并导致 `tools` 服务不加载、本插件工具全部消失；请改为 `native` 或 `ptc`。
-> - devDependencies 已升至 `0.2.1-rc.2`，并移除上游已停产的 `@deepseek-ai/dsh-invariants`。
-
-> **DSH 0.1.7 适配**：0.1.7 移除了旧的 `SettingsProvider.installSection()`，改为从 Loader profile entry 投影 `.volatile()` 配置。本插件现使用 `thin-search` 条目、`SettingsForms.configure({ auto: false })` 和 `SettingsForms.mutate()`；自定义配置页从 `settings.section`（全局设置）迁到 `plugins.row.config`（插件管理页），`/thin-search-engine` 命令保持不变，设置保存到当前 profile 的 `cordis.patch.yml`。entry id 特意沿用旧 `settings.yaml` 的 `thin-search:` section 名，因此 DSH 0.1.7 首次启动时可自动导入旧配置。
->
-> **从 v0.4.0 升级**：v0.4.0 仍依赖已移除的 settings namespace API，只能用于 DSH 0.1.5–0.1.6；升级 DSH 到 0.1.7 时必须使用 v0.5.0 或更高版本。若曾在 profile patch 中手工写过 `id: web-thin-search`，请改为 `id: thin-search`。
-
-> **同时修正（v0.4.0）**：三个自带工具（`free_search_test` / `platform_search` / `advanced_search`）的 `output.render` 原先返回裸字符串，而核心契约要求返回 `ContentBlock[]`（`{ type: "text", text }`）。已改为符合契约的数组形式。
->
-> **说明（避免误读）**：这**不是**一次线上故障修复。这三个工具始终声明了 `finalizeContent`，核心会在结果落库前先套用它把字符串转成 `ContentBlock[]`，因此裸字符串从未真正进入 `tool-result.content`——实测全部会话日志（截至 2026-09-11，269 个会话文件）中，这三个工具共 120 次真实调用（111 成功 / 9 失败），落库结果 100% 是数组，无一例外，也从未出现过相关 TypeError。本次改动属于契约对齐与纵深防御（若日后移除 `finalizeContent`，或核心在规范化之前新增校验，裸字符串才会暴露）。输出文本与改动前逐字节一致，无行为变化。
-
-> **从 v0.1.x 升级**：dsh v0.1.2-alpha.2 对 settings seam 做了破坏性重构——`installSettingsSection` / `settingsNamespace` 被移除，改用 `SettingsProvider.installSection`（见 dsh-v0.1.2-alpha.2+）。插件 v0.2.0 起仅支持 dsh ≥ 0.1.2-alpha.2；仍在 dsh 0.1.1 的用户请使用插件 v0.1.1。
-
-### 配置存储
-
-- **插件业务配置**（引擎、缓存、平台、代理、搜索增强…）由 DSH 的 SettingsForms 写入当前 profile 的 `cordis.patch.yml` 中 `id: thin-search` 这一行 —— 这是 DSH 为每个插件保留的官方配置位，不是本插件私自改公用文件；插件页、`/thin-search-engine` 与桥接 API 的读写都走同一套 `settings.describe/mutate`（原子写 + 文件锁 + revision 冲突检测）。
-- 本插件**不另建配置文件**：脱离 SettingsForms 的私有 JSON/YAML 会失去插件页表单投影、`.volatile()` 热更新、profile 级作用域与旧 `settings.yaml` 迁移能力。
-- **搜索提供方（`web.searchProvider`）属于官方 `web` 行**：0.2.1 起经 `SettingsForms.mutate("web", …)` 改写（与官方「网页搜索设置」同一权威来源、立即生效）；0.1.7–0.2.0 才回退到带标记的托管块。若检测到 profile patch 里已有用户自己维护的 `- id: web` 行，插件**拒绝**追加重复行（重复 id 会与 ConfigEditor 按 id 定位、按层去重的逻辑打架，导致「保存后不生效」），并提示手动切换。
-
-### 与官方插件的关系
-
-- 官方 `web-search-deepseek`（`deepseek-official`）与本插件可共存；`searchProvider` 指向谁就用谁
-- 本插件默认通过 patch 接管搜索（无需 key、零成本）；**插件配置页"搜索提供方"开关**一键切回官方（DSH 0.2.1 起经 SettingsForms 写 `web.searchProvider`，立即生效；0.1.7–0.2.0 写 profile patch，需重启），也可手动改 `~/.dsh/profiles/<profile>/cordis.patch.yml`；官方「网页搜索设置」页与本插件改的是同一个键，以最后保存者为准
-- 本插件**不包含**任何模型调用逻辑，也不读取 `DEEPSEEK_API_KEY` —— 第三方网关用户可直接使用
-
-### License
-
-MIT
-
----
-
-## English
-
-### Why
-
-DSH's official web-search plugin forces a DeepSeek V4 Flash model call in Anthropic format (`/anthropic/v1/messages` + `web_search_20250305`). If you use a third-party gateway, it may not speak the Anthropic protocol — and even when it does, every search costs a model turn.
-
-**This plugin scrapes free search engines with plain HTTP (Bing / DuckDuckGo / SearXNG / AnySearch). No model calls, no Anthropic protocol, no API keys — searching costs nothing and works with any gateway.**
-
-### Features
-
-- **Zero cost** — all engines free, no keys, no registration
-- **Zero model calls** — plain HTTP only; no tokens consumed
-- **Auto fallback** — any engine failure (rate limit / anti-bot / network / 0 results) automatically tries the next free engine, with a `Note: ... using ...` marker
-- **Engines**: `anysearch` (default, best for Chinese natural-language queries) · `bing` (fast, zh-CN) · `searxng` (multi-instance, custom instances) · `ddg` · `ddg-lite`
-- **Search enhancement** — optional (default OFF): rewrites natural-language queries into compact keywords via the current default LLM. ⚠️ Consumes tokens while ON; OFF keeps searching fully free. Supports custom system prompt: the textarea always shows the effective prompt (built-in default or custom), editable; "Reset to default" overwrites with the built-in default prompt
-- **Web settings page** — Settings → Search Engine
-- **Popup command** — `/thin-search-engine` in chat
-- **Engine test** — `free_search_test` tool + "Test engine" button
-- **Fresh results** — ask for "last week's news" or "the latest updates" and get recent results instead of stale ones
-- **Platform search** — GitHub / V2EX / Bilibili / Reddit / Hacker News / Stack Overflow / Wikipedia / npm
-- **HTTP(S) proxy** — built-in (undici ProxyAgent), plugin-scoped only; works with V2Ray / Clash HTTP ports; no SOCKS5
-- **Result caching** — LRU 50, TTL 0-5 min
-- **web_fetch preserved** — official `dsh-web-fetch-http` stays enabled
-- **Clean integration** — official `WebSearchProvider` seam; coexists with official plugins
-
-### Install
-
-```sh
-dsh plugin --profile web add dsh-thin-search        # from npm (once published)
-dsh plugin --profile web add github:loommii/dsh-thin-search   # from GitHub
-```
-
-Restart `dsh web` after installing. The plugin's patch points `web.searchProvider` to itself automatically.
-
-To uninstall:
-
-```sh
-dsh plugin --profile web remove dsh-thin-search
-```
-
-Restart `dsh web` afterwards to restore DSH's official search.
-
-### Usage
-
-Settings page: **Plugins → `dsh-thin-search` → Configure** (provider switch, engine, enhancement, platforms, cache TTL, proxy). Chat command: `/thin-search-engine`. Config is stored in `~/.dsh/profiles/<profile>/cordis.patch.yml` under the `thin-search` entry (see the Chinese section above for the full schema).
-
-### Proxy notes
-
-Set `thin-search.config.proxy` (e.g. `http://127.0.0.1:7890`) in the settings page or `~/.dsh/profiles/<profile>/cordis.patch.yml` — no env vars needed. HTTP/HTTPS only; no SOCKS5. Only this plugin's requests go through the proxy; DSH and other plugins are untouched.
-
-### Where config lives
-
-- **Plugin settings** (engine, cache, platforms, proxy, enhancement, …) are persisted by DSH's SettingsForms into the active profile's `cordis.patch.yml`, in the `id: thin-search` row. That row is the official per-plugin slot DSH reserves; the plugin page, `/thin-search-engine` and the bridge API all read/write through `settings.describe/mutate` (atomic writes, file lock, revision conflict detection).
-- The plugin deliberately **does not keep a private YAML/JSON store**: a store outside SettingsForms would lose the plugin-page form projection, `.volatile()` hot updates, profile scoping and the legacy `settings.yaml` migration.
-- **The search provider (`web.searchProvider`) belongs to the official `web` row**: since 0.2.1 the switch goes through `SettingsForms.mutate("web", …)` (same authoritative source as the official Web Search settings page, effective immediately); only 0.1.7–0.2.0 fall back to the marked managed block. If the profile patch already contains a user-managed `- id: web` row, the plugin **refuses** to append a duplicate (duplicate ids conflict with ConfigEditor's id-based lookup and per-layer dedup, so a save can silently fail to apply) and asks you to switch manually.
-
-> **Known limits**: DuckDuckGo anti-bot (HTTP 202) and public SearXNG rate limits (HTTP 429) apply to proxy/datacenter egress IPs. Prefer **Bing / AnySearch** behind a proxy. Self-hosted SearXNG instances can be added via `searxngInstances`.
-
-### Compatibility
+[![node](https://img.shields.io/badge/node-24.9%2B-339933)](package.json)
+[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.3-4c8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+Free, keyless web search for **DeepSeekRuntime 0.2.2-rc.3** on **Node 24.9+**.
+Thin Search replaces the model-backed web search call with plain HTTP requests to
+free engines, so search costs no model tokens unless you explicitly enable query
+enhancement.
+
+v1.0.0 is a complete rewrite and supports **only DSH 0.2.2-rc.3**. It does not
+carry compatibility branches for DSH 0.1.x, 0.2.0 or 0.2.1.
+
+## Features
+
+- Five free engines with automatic fallback: Bing (default), AnySearch, SearXNG,
+  DuckDuckGo HTML and DuckDuckGo Lite.
+- Native `WebSearchProvider` (`id: thin-search`), so it coexists with other
+  registered providers and is selected through the global web search setting.
+- Time ranges for the `advanced_search` tool: fixed tiers, relative durations
+  and absolute dates.
+- In-memory LRU result cache with a minutes-based TTL; cache is consulted before
+  enhancement, so a cache hit never calls a model.
+- Optional query enhancement through the current Agent model, with an exclusive
+  `provider:model` override and a prompt file.
+- Eight platform adapters: GitHub, V2EX, Bilibili, Reddit, Hacker News,
+  Stack Overflow, Wikipedia and npm.
+- Three Agent tools, each forwarding cancellation and rendering text content
+  blocks.
+- A native Plugins-page configuration form (en/zh) and the
+  `/thin-search-engine` popup command.
+- No HTTP bridge, no private configuration store and no profile patch writes;
+  provider switches use ConfigForms and apply live.
+
+## Requirements
 
 | Item | Requirement |
 |---|---|
-| DSH | `>= 0.1.7-rc.1 < 0.3.0-0` (0.1.7–0.2.x including prereleases; verified on 0.1.7-rc.1, 0.2.0-rc.2 and 0.2.1-rc.2) |
-| Node.js | `>= 22.19.0` |
+| DSH | `0.2.2-rc.3` (exact; declared in `engines.dsh` and peer dependencies) |
+| Node | Node 24.9 or newer (`engines.node`: `>=24.9.0`) |
+| Cordis | `~4.1.0` |
+| Runtime dependencies | `@deepseek-ai/schemastery`, `node-html-parser` |
 
-> **DSH 0.2.1 support (v0.6.0)**:
-> - `dsh-web` 0.2.1 removed `WebRuntime.searchProviderId`; provider selection now reads the volatile `config.searchProvider` on every call. The plugin no longer writes that field (writing it only creates an inert own property) and instead reads `config.searchProvider.get()`, logging an actionable warning when no provider is configured.
-> - **Engine-mode switching** now goes through `SettingsForms.mutate("web", …)` on 0.2.1 (the `web` fields became volatile), so it shares the official Web Search settings page's authoritative config and takes effect immediately; on 0.1.7–0.2.0 the same switch falls back to the managed profile-patch block (restart required).
-> - The official 0.2.1-rc.2 Web Search settings toggle (DeepSeek Search / Fetch APIs) writes the same `web.searchProvider` key; the last save wins. The plugin page shows the currently effective provider id.
-> - A deployment that explicitly sets `tools: { mode: both }` will fail schema validation on 0.2.1 (`both` was removed), dropping the whole `tools` service — and with it this plugin's tools. Use `native` or `ptc`.
-> - devDependencies are pinned to `0.2.1-rc.2`; the discontinued `@deepseek-ai/dsh-invariants` was dropped.
+## Install
 
-> **DSH 0.1.7 migration**: DSH 0.1.7 removed the old `SettingsProvider.installSection()` namespace API. The plugin now declares every editable field with `.volatile()`, attaches its custom page through `SettingsForms.configure({ auto: false }, ctx.fiber)`, and maps the bridge's logical `thin-search` namespace to the `thin-search` Loader profile entry. Saves are persisted to the active profile's `cordis.patch.yml`. The entry id deliberately matches the legacy `settings.yaml` `thin-search:` section so DSH 0.1.7 can import existing settings automatically on first boot.
->
-> **Upgrading from v0.4.0**: v0.4.0 still calls the removed settings namespace API and therefore only supports DSH 0.1.5–0.1.6. Use v0.5.0 or newer when upgrading to DSH 0.1.7. If a profile patch manually contains `id: web-thin-search`, rename it to `id: thin-search`.
+```sh
+dsh plugin --profile web add dsh-thin-search
+```
 
-> **Also corrected in v0.4.0**: the three bundled tools (`free_search_test` / `platform_search` / `advanced_search`) returned a bare string from `output.render`, while the core contract requires `ContentBlock[]` (`{ type: "text", text }`). They now return conformant arrays.
->
-> **Note (to prevent misreading)**: this was **not** a production bug fix. All three tools have always declared `finalizeContent`, which the core applies before a result is persisted, converting the string to `ContentBlock[]` — so the bare string never actually reached `tool-result.content`. Across every session log on the author's machine (269 session files, as of 2026-09-11) these three tools were invoked 120 times (111 succeeded, 9 failed), and 100% of the persisted results are arrays; the related `TypeError` never occurred. This change is contract alignment and defence in depth (it would only surface if `finalizeContent` were removed, or if the core added a check before normalization). Rendered text is byte-identical to before — no behavioural change.
+Restart `dsh web` once. The bundle patch inserts the `thin-search` row and
+sets the first-boot default:
 
-> **Upgrading from v0.1.x**: dsh v0.1.2-alpha.2 shipped a breaking settings-seam refactor — the module-level `installSettingsSection` / `settingsNamespace` helpers were removed in favor of `SettingsProvider.installSection`. Plugin v0.2.0 requires dsh ≥ 0.1.2-alpha.2; stay on plugin v0.1.1 if you are still on dsh 0.1.1.
+```yaml
+- insert:
+    - id: thin-search
+      name: dsh-thin-search
+      config:
+        provider: bing
+        bingMarket: zh-CN
+- id: web
+  config:
+    searchProvider: thin-search
+    fetchProvider: http
+```
 
-### License
+The patch only sets `web.searchProvider` and `web.fetchProvider`; it never
+rewrites a profile and never edits other rows. Uninstall with:
 
-MIT
+```sh
+dsh plugin --profile web remove dsh-thin-search
+```
+
+Restart afterwards to return to whichever provider the deployment selects next.
+
+## Migration
+
+### From v0.6.x or older
+
+v0.6.x targeted DSH 0.1.7-0.2.1 and shipped a plugin-level HTTP proxy, a settings
+bridge and a UI engine test control. Those surfaces are removed in v1.0.0.
+
+1. Move to DSH 0.2.2-rc.3 and Node 24.9+. v1.0.0 is not supported on older DSH
+   releases: compatibility is declared in `engines.dsh` and the peer dependencies,
+   but the plugin does not enforce a runtime version gate.
+2. Replace the old `proxy` field with the DSH global proxy policy: set
+   `HTTP_PROXY`, `HTTPS_PROXY` and (when needed) `NO_PROXY` before
+   starting DSH. Thin Search uses the shared HTTP client, so there is no
+   per-plugin proxy setting anymore.
+3. Delete the old `cache` boolean; `cacheTtl` now also acts as the on/off switch
+   (`0` disables) and defaults to `5` minutes.
+4. Replace `enhanceSystemPrompt` with `enhanceSystemPromptPath`. Prompt text no
+   longer lives in `cordis.patch.yml`; write it to a file such as
+   `~/.dsh/thin-search/system-prompt.md` and point the field at it.
+5. Delete any manually maintained `web` engine-mode block from a profile patch.
+   The bundled patch pins the provider once; later switches go through
+   ConfigForms and take effect immediately.
+6. Keep existing Agent instructions: the provider id `thin-search` and the tool
+   names `free_search_test`, `platform_search` and `advanced_search` are unchanged.
+7. Delete `tools.mode` and `tools.maxParallelSubCalls` from the `tools` row in the
+   profile patch. DSH 0.2.2-rc.3 declares both fields as `z.never()` and rejects
+   every value. The composition mounts the executor instead, for example the
+   native or PTC tool-executor bundle (`@deepseek-ai/dsh-tool-executor-native`
+   or `@deepseek-ai/dsh-tool-executor-ptc`); do not set either field.
+
+## Configuration
+
+Every editable field is volatile and appears on the plugin row page. The schema
+is closed: exactly nine fields.
+
+| Field | Default | Description |
+|---|---|---|
+| `provider` | `bing` | Preferred free engine; fallback still applies. |
+| `platforms` | all eight | Platforms `platform_search` may query. |
+| `cacheTtl` | `5` | Result-cache lifetime in minutes; `0` disables it. |
+| `searchEnhance` | `false` | Enables one model call per cache miss. |
+| `enhanceModel` | empty | `provider:model` override; empty uses the current Agent model. |
+| `enhanceSystemPromptPath` | empty | Prompt file; empty uses the built-in prompt. |
+| `bingMarket` | `zh-CN` | Bing `mkt` value. |
+| `region` | empty | DuckDuckGo `kl` value, for example `cn-zh`. |
+| `searxngInstances` | empty | Absolute http(s) SearXNG base URLs; empty uses built-ins. |
+
+Edit them on **Plugins -> dsh-thin-search -> Configure**. The Host owns storage
+and persistence through ConfigForms; the page saves changed fields with one
+revision-fenced `mutate` and shows save/rejection state inline.
+
+## Provider switching
+
+The plugin row page has a **Search provider** card. It lists the providers the
+Host reports through `ctx.remote.web.listProviders()` and switches the global
+selection with `ctx.configForms.get("web").set("searchProvider", id)`. The write is
+accepted by the Host and applied live; no restart and no patch edit is needed.
+
+The `/thin-search-engine` command only changes the preferred free engine and
+writes `configForms.get("thin-search").set("provider", id)`. The global provider
+selection is independent of that engine choice.
+
+## Search enhancement and the prompt file
+
+Enhancement is off by default. While it is on, every cache miss sends one short
+request to the current Agent model (or to the configured `provider:model`) to
+rewrite the query. An explicit `enhanceModel` is exclusive: if that model fails,
+the original query is used and no other model is called.
+
+The system prompt comes from `enhanceSystemPromptPath`:
+
+- Empty: the built-in prompt is used.
+- `~/...` or an absolute path: the file is read on each enhancement request, is
+  abortable with the search, and is capped at 64 KiB.
+- A relative path is invalid: the built-in prompt is used and a warning is logged.
+- Unreadable, blank or oversized files fall back to the built-in prompt and log a
+  warning.
+
+Prompt text never enters `cordis.patch.yml`. Use a plugin data file such as
+`~/.dsh/thin-search/system-prompt.md`.
+
+## Tools
+
+| Tool | Timeout | Purpose |
+|---|---|---|
+| `free_search_test` | 65 s | Probes engines individually; reports per-engine status. |
+| `platform_search` | 30 s | Searches one enabled platform. |
+| `advanced_search` | 60 s | Web search with `timeRange` and an optional first engine. |
+
+All three forward `exec.signal` into the HTTP client, so cancellation aborts the
+in-flight request. `platform_search` rejects with the HTTP client code
+`ABORTED`; the pipeline tools reject with `WEB_ABORTED`. Output renders as text
+content blocks, not bare strings, and escapes untrusted title, snippet and URL
+text before composing Markdown.
+
+## Engines, time ranges and cache
+
+Without a time window the preferred engine runs first. With a time window,
+time-capable engines (SearXNG, DuckDuckGo, DuckDuckGo Lite) move ahead because
+Bing and AnySearch cannot apply a native filter. Any failure, empty result or
+invalid-URL result falls through to the next engine. The result note names the
+engine that actually answered.
+
+Time input accepts `day` / `week` / `month` / `year`, relative durations
+such as `12h`, `3d`, `2mo` or `1y`, and absolute dates such as
+`2026-07-01`. Absolute dates are converted to days from today, then mapped
+to the nearest fixed tier for the time-capable engines.
+
+Network errors, request timeouts and 5xx responses retry once. HTTP 202, 403 and real
+anti-bot interstitials fail immediately and fall through to the next engine.
+JSON responses are never treated as challenge pages, even when the payload text
+contains words such as "captcha" or "access denied".
+
+The cache is an in-memory LRU of 50 entries. Its key includes the query, result
+limit, time window, engine and the config fields that change results (market,
+region, SearXNG instances, enhancement settings). A config change therefore
+cannot serve a stale answer.
+
+## Platform limits
+
+| Platform | Limit |
+|---|---|
+| GitHub | Public repository search; unauthenticated rate limits apply. |
+| V2EX | Searches the current hot-topic list only; the public API has no full-text search. |
+| Bilibili | May reject requests from data-center or proxy egress IPs. |
+| Reddit | May reject requests from data-center or proxy egress IPs. |
+| Hacker News | Public search API; no authentication. |
+| Stack Overflow | Public Stack Exchange API; quota limited. |
+| Wikipedia | MediaWiki search API. |
+| npm | Registry search; package metadata only. |
+
+Disabling a platform removes it from the tool; calling `platform_search` for a
+disabled platform returns a clear configuration error.
+
+## Global proxy
+
+Thin Search has no proxy field. It uses the DSH HTTP stack, so the global
+proxy policy applies to every request: set `HTTP_PROXY` and/or
+`HTTPS_PROXY` (plus `NO_PROXY` when needed) in the environment that starts
+`dsh web`. This affects DSH as a whole, not only this plugin. There is no
+separate proxy agent, no SOCKS proxy option and no per-plugin bypass.
+
+## Security and data handling
+
+- Result URLs are accepted only when they are absolute `http:` or `https:`;
+  relative, `javascript:`, `data:`, `mailto:` and `ftp:` URLs are dropped.
+- Sources are deduplicated by URL and normalized before they reach an Agent.
+- There is no HTTP bridge, no custom transport and no private settings store.
+- The Client bundle requires only `react` and `react/jsx-runtime`; it makes
+  no network requests and writes only through ConfigForms.
+- The plugin writes no profile files and does not modify deployment patches.
+- Enhancement is opt-in; with it off the plugin spends no model tokens.
+
+## Development and verification
+
+```sh
+npm ci
+npm run check
+npm pack --dry-run
+```
+
+`npm run check` runs, in order:
+
+1. `typecheck:host` and `typecheck:client`. The host typecheck is DOM-free;
+   the browser typecheck owns the DOM lib.
+2. `test:host`, `test:client` and `test:integration`.
+3. `build:host` and `build:client` (tsdown outputs `lib/index.js` and
+   `lib/client.js`), followed by `smoke:client`, which loads the built
+   browser bundle through `window.__ModuleLoader__.load`.
+
+CI rebuilds before running the tests and fails when a fresh build differs from
+the committed `lib` tree.
+
+Most integration files load `lib/index.js` or `lib/client.js`; the cache,
+time-range and config helpers import the source modules directly. The suite uses
+a stubbed network to cover provider registration, the nine-field config schema,
+cache and time-range behavior, tool cancellation, URL validation, built-client
+form mapping and the release package file list.
+
+`npm pack --dry-run` must list `lib/index.js`, `lib/client.js`,
+`locale/en.json`, `locale/zh.json`, `icon.svg`, `cordis.patch.yml`,
+`CHANGELOG.md`, `README.md`, `LICENSE` and `package.json`, and no
+tests, sources or temporary files.
+
+## Verification limits
+
+- The test suites do not call live search engines. They replay recorded HTML/JSON
+  fixtures and stubbed HTTP responses; engine markup can change without warning.
+- The Client page was verified by unit/SSR/interaction tests and by loading the
+  built bundle through the ModuleLoader. The running DSH profile used to build
+  this release does not install the plugin, so no live GUI installation was
+  exercised here.
+- GitHub, npm, Stack Exchange and Reddit expose changing rate limits; a CI run
+  proves the code paths, not the availability of those public services.
+- CI runs Node 24.9 on Linux; other platforms are not part of the release gate.
+
+## License
+
+MIT. See `LICENSE`.
+
+## 中文要点
+
+- v1.0.0 完全重构，只支持 DSH 0.2.2-rc.3 与 Node 24.9+。
+- 安装：`dsh plugin --profile web add dsh-thin-search`，重启 `dsh web`。补丁只设置
+  `web.searchProvider` 与 `web.fetchProvider`。
+- 配置共 9 个字段，在“插件管理 -> dsh-thin-search -> 配置”页编辑；页面通过 ConfigForms
+  读写，保存时带 revision。
+- 全局搜索提供方通过 `configForms.get("web").set("searchProvider", id)` 切换，立即生效，
+  不写 profile 补丁，无需重启。
+- 网络代理使用 DSH 全局策略：启动前设置 `HTTP_PROXY` / `HTTPS_PROXY`；插件没有
+  独立代理选项。
+- 搜索增强默认关闭；提示词放文件并通过 `enhanceSystemPromptPath` 指定，不再写入
+  `cordis.patch.yml`。
+- 平台限制：V2EX 仅热帖；Bilibili 与 Reddit 可能拒绝数据中心/代理出口 IP；GitHub 与
+  npm 受公开 API 限流影响。
+- 迁移：移除旧字段 `proxy` / `cache` / `enhanceSystemPrompt`，分别改用全局代理、
+`cacheTtl` 与 `enhanceSystemPromptPath`；旧设置桥与托管块已删除。
+- 验证：`npm run check`（含集成测试与构建后 smoke）与 `npm pack --dry-run`；测试全部
+  使用桩网络，未做真实引擎联网验证，也未在运行中的 DSH 里安装本插件的 GUI 实测。

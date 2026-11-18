@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Thin Search",
-    "description": "Free web search with keyless engines (Bing/DuckDuckGo/SearXNG/AnySearch), automatic fallback, platform search, and web_fetch."
+    "description": "Free, keyless web search for DeepSeekRuntime 0.2.2-rc.3: Bing, AnySearch, SearXNG and DuckDuckGo with automatic fallback, result cache, optional model enhancement, eight platform adapters, and three Agent tools."
   }
 }
