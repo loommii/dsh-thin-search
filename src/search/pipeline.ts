@@ -9,6 +9,7 @@ import type { EngineContext, EngineId, SearchEngine } from './engines/types'
 import type { HttpClient, LoggerLike } from './http'
 import { joinNotes, normalizeSources } from './normalize'
 import { parseTimeRange, timeRangeLabel, timeRangeKey, type TimeRange } from './time-range'
+import { raceWithSignal } from '../util/abort'
 
 /** Request accepted by the pipeline; extends the public web request with time and engine hints. */
 export interface PipelineRequest extends WebSearchRequest {
@@ -189,31 +190,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** Race one engine operation against its own timeout/abort signal. */
-function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) {
-    void promise.catch(() => undefined)
-    return Promise.reject(new Error('engine aborted'))
-  }
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = (): void => {
-      signal.removeEventListener('abort', onAbort)
-      reject(new Error('engine aborted'))
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-    void promise.then(
-      (value) => {
-        signal.removeEventListener('abort', onAbort)
-        resolve(value)
-      },
-      (error: unknown) => {
-        signal.removeEventListener('abort', onAbort)
-        reject(error)
-      },
-    )
-  })
-}
-
 /** The provider pipeline: cache → optional enhancement → engine fallback → cache store. */
 export class SearchPipeline {
   private readonly engines: ReadonlyMap<EngineId, SearchEngine>
@@ -255,7 +231,11 @@ export class SearchPipeline {
     const onCallerAbort = (): void => { controller.abort(callerSignal?.reason) }
     callerSignal?.addEventListener('abort', onCallerAbort, { once: true })
     try {
-      return await raceWithAbort(engine.search({ ...context, signal: controller.signal }), controller.signal)
+      return await raceWithSignal(
+        engine.search({ ...context, signal: controller.signal }),
+        controller.signal,
+        () => new Error('engine aborted'),
+      )
     } catch (error: unknown) {
       if (callerSignal?.aborted === true) throw abortError(callerSignal)
       if (timedOut) throw new Error(`engine "${engine.id}" timed out after ${budget}ms`)

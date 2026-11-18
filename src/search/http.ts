@@ -1,5 +1,7 @@
 /** Global fetch wrapper: URL validation, per-attempt timeout, retry classification, and block-page detection. */
 
+import { raceWithSignal } from '../util/abort'
+
 /** Minimal logger surface shared by the host modules. */
 export interface LoggerLike {
   warn(message: string): void
@@ -154,31 +156,6 @@ function parseHttpUrl(raw: string): string {
     throw new HttpError(`unsupported URL scheme: ${parsed.protocol}`, 'INVALID_URL', { transient: false })
   }
   return parsed.toString()
-}
-
-/** Race a promise against a signal, rejecting even when the underlying operation ignores cancellation. */
-function raceWithSignal<T>(promise: Promise<T>, signal: AbortSignal, errorFactory: () => HttpError): Promise<T> {
-  if (signal.aborted) {
-    void promise.catch(() => undefined)
-    return Promise.reject(errorFactory())
-  }
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = (): void => {
-      signal.removeEventListener('abort', onAbort)
-      reject(errorFactory())
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-    void promise.then(
-      (value) => {
-        signal.removeEventListener('abort', onAbort)
-        resolve(value)
-      },
-      (error: unknown) => {
-        signal.removeEventListener('abort', onAbort)
-        reject(error)
-      },
-    )
-  })
 }
 
 /** Wait for {@code ms}, rejecting with {@code ABORTED} when the caller cancels. */
