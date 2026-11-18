@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 const ROOT = fileURLToPath(new URL('../../', import.meta.url))
 const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as Record<string, any>
 const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8')
+const readmeEn = readFileSync(new URL('../../README.en.md', import.meta.url), 'utf8')
 const changelog = readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')
 const license = readFileSync(new URL('../../LICENSE', import.meta.url), 'utf8')
 const commitStyle = readFileSync(new URL('../../docs/规范/COMMIT_STYLE.md', import.meta.url), 'utf8')
@@ -140,24 +141,34 @@ describe('release documentation', () => {
       'V2EX',
       'Bilibili',
       'Reddit',
-      'Migration',
-      'Verification limits',
       'npm run check',
       'npm pack --dry-run',
-    ]) expect(readme, `README must document ${required}`).toContain(required)
-    expect(readme).not.toMatch(/plugin-scoped proxy|ProxyAgent|undici/iu)
-    expect(readme).not.toMatch(/test engine.{0,20}button/iu)
-    expect(readme).toContain('is not supported on older DSH')
-    expect(readme).toContain('Delete the old `cache` boolean; `cacheTtl` now also acts as the on/off switch')
-    expect(readme).toContain('tools.mode')
-    expect(readme).toContain('@deepseek-ai/dsh-tool-executor-native')
-    expect(readme).not.toMatch(/change it to `?native`?/u)
-    expect(readme).toContain('request timeouts and 5xx responses retry once')
-    expect(readme).toContain('Plugins → Installed → dsh-thin-search → Configuration')
-    expect(readme).toContain('there is no global Settings item')
+    ]) {
+      expect(readme, `README.md must document ${required}`).toContain(required)
+      expect(readmeEn, `README.en.md must document ${required}`).toContain(required)
+    }
+    for (const forbidden of [/plugin-scoped proxy|ProxyAgent|undici/iu, /test engine.{0,20}button/iu, /change it to `?native`?/u]) {
+      expect(readme, `README.md must not contain ${forbidden}`).not.toMatch(forbidden)
+      expect(readmeEn, `README.en.md must not contain ${forbidden}`).not.toMatch(forbidden)
+    }
+    // README.md is the Chinese default page; README.en.md mirrors it in English.
+    expect(readme).toContain('从旧版本迁移')
+    expect(readme).toContain('验证限制')
+    expect(readme).toContain('不受支持')
     expect(readme).toContain('插件 → 已安装 → dsh-thin-search → 配置')
     expect(readme).toContain('没有全局设置项')
-    expect(readme).not.toContain('Plugins -> dsh-thin-search -> Configure')
+    expect(readme).toContain('tools.mode')
+    expect(readme).toContain('@deepseek-ai/dsh-tool-executor-native')
+    expect(readmeEn).toContain('Migration')
+    expect(readmeEn).toContain('Verification limits')
+    expect(readmeEn).toContain('is not supported on older DSH')
+    expect(readmeEn).toContain('Delete the old `cache` boolean; `cacheTtl` now also acts as the on/off switch')
+    expect(readmeEn).toContain('tools.mode')
+    expect(readmeEn).toContain('@deepseek-ai/dsh-tool-executor-native')
+    expect(readmeEn).toContain('request timeouts and 5xx responses retry once')
+    expect(readmeEn).toContain('Plugins → Installed → dsh-thin-search → Configuration')
+    expect(readmeEn).toContain('there is no global Settings item')
+    expect(readmeEn).not.toContain('Plugins -> dsh-thin-search -> Configure')
   })
 
   it('rewrites the commit style for this repository without stale external-project rules', () => {
