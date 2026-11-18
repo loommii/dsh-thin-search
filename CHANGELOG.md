@@ -135,24 +135,32 @@ locale keys and patch file are frozen for the v1.0.0 release.
 - #2: SearXNG sub-path deployments work again. Instances are joined as
   `<instance>/search`, so `https://host/searxng` requests `/searxng/search`
   instead of `/search`.
-- #4: absolute dates in the future are rejected as invalid instead of being
-  clamped to one day, in both the string and the `{ after }` forms.
+- #4 / N4: absolute dates are read as a local calendar day, and a date after the
+  local today is rejected as invalid instead of being clamped to one day, in both
+  the string and the `{ after }` forms.
 - #7: `advanced_search` rejects an unknown `engine` value with the list of valid
   engines instead of silently ignoring it, and the parameter now documents that
   the hint is a preference: a time window still puts time-capable engines first.
-- #10: DuckDuckGo HTML and DuckDuckGo Lite restore `publishedAt`. A bounded
-  timestamp read emits `YYYY-MM-DD` only when the text parses as a real date.
-- #11: `platform_search` wraps adapter failures as `WebError`, so cancellation is
-  `WEB_ABORTED` and every other failure is `WEB_PROVIDER_ERROR` with the original
-  error as `cause`; the tool result no longer loses its error code.
+- #10 / N1: DuckDuckGo HTML and DuckDuckGo Lite restore `publishedAt`. A bounded
+  timestamp read emits `YYYY-MM-DD` only when the text parses as a real date, and
+  DuckDuckGo Lite now parses each result row in document order, so a result without
+  a timestamp can no longer inherit the next result's date or snippet.
+- #11 / N3: every failure a tool throws is a `WebError`. Adapter failures map to
+  `WEB_ABORTED` (cancellation) or `WEB_PROVIDER_ERROR` with the original error as
+  `cause`, and argument validation (unknown `engine`, unknown or disabled platform,
+  missing `query`, invalid `timeRange`) now raises `WEB_INVALID_REQUEST` instead of
+  a bare `Error`. `free_search_test` still reports per-engine failures as data.
 - #12: `SearchEngine.supportsTimeRange` is the single source of truth for chain
-  ordering and result notes; the duplicate id-based helper is gone.
+  ordering and result notes; the duplicate id-based helper is gone. A test with a
+  capability-flipped fake engine fails if ordering ever returns to an id check.
 - #13: one `raceWithSignal` helper in `src/util/abort.ts` replaces the three
   per-module implementations, with unchanged error messages and codes.
 - #14: both tools reuse `clampMaxResults`, so `NaN`, `undefined`, `0` and
   oversized limits normalize to `5`, `5`, `1` and `10` in one place.
-- #3: a `web/providers-changed` event that arrives during an in-flight provider
-  read now queues exactly one follow-up read instead of being dropped.
+- #3 / N2: `web/providers-changed` events are drained. An event that arrives during
+  a read or during a follow-up read triggers another read until no request remains,
+  and disposal stops the loop immediately; no event is dropped while a chain of
+  reads is in flight.
 - #5 (F1): validation errors are stored per settings field. A successful write to
   one field no longer clears another field's error or resets its draft.
 - #6 (F5): the page accepts Windows drive and UNC absolute prompt paths in
