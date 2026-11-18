@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { WebError } from '@deepseek-ai/dsh-web'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { createTools } from '../../src/tools'
+import { HttpError } from '../../src/search/http'
 import type { PipelineLike } from '../../src/search/pipeline'
 import type { PlatformSearchService } from '../../src/platforms'
 import { sources, testConfig, toolExec } from './helpers'
@@ -131,6 +132,41 @@ describe('host tool contracts', () => {
     expect(value.results[0]).toMatchObject({ engine: 'bing', status: 'fail', error: 'HTTP 403' })
     expect(value.results[1]).toMatchObject({ engine: 'not-an-engine', status: 'fail' })
     expect(value.results[1]?.error).toContain('unknown engine')
+  })
+
+  it('wraps platform adapter failures as WebError with code and cause', async () => {
+    const aborted = new HttpError('aborted', 'ABORTED', { transient: false })
+    const abortedTool = byName(buildTools(fakePipeline(), {
+      search: async () => { throw aborted },
+    }), 'platform_search')
+    const abortedError = await abortedTool.execute(
+      { platform: 'github', query: 'q' },
+      toolExec(new AbortController().signal) as never,
+    ).catch((caught: unknown) => caught)
+    expect(abortedError).toBeInstanceOf(WebError)
+    expect((abortedError as WebError).code).toBe('WEB_ABORTED')
+    expect((abortedError as WebError).cause).toBe(aborted)
+
+    const ordinary = new Error('adapter exploded')
+    const failedTool = byName(buildTools(fakePipeline(), {
+      search: async () => { throw ordinary },
+    }), 'platform_search')
+    const failedError = await failedTool.execute(
+      { platform: 'github', query: 'q' },
+      toolExec(new AbortController().signal) as never,
+    ).catch((caught: unknown) => caught)
+    expect(failedError).toBeInstanceOf(WebError)
+    expect((failedError as WebError).code).toBe('WEB_PROVIDER_ERROR')
+    expect((failedError as WebError).cause).toBe(ordinary)
+
+    const controller = new AbortController()
+    controller.abort()
+    const cancelledError = await failedTool.execute(
+      { platform: 'github', query: 'q' },
+      toolExec(controller.signal) as never,
+    ).catch((caught: unknown) => caught)
+    expect(cancelledError).toBeInstanceOf(WebError)
+    expect((cancelledError as WebError).code).toBe('WEB_ABORTED')
   })
 
   it('rejects disabled and unknown platforms', async () => {
