@@ -103,9 +103,9 @@ describe('built host tools', () => {
     const controller = new AbortController()
     const pending = executeTool(tools.platform!, { platform: 'github', query: 'cancelled' }, controller.signal)
     setTimeout(() => { controller.abort() }, 10)
-    // Platform adapters surface the HTTP client's explicit cancellation code;
-    // the point of this test is that the run signal reaches the network.
-    await expect(pending).rejects.toMatchObject({ code: 'ABORTED' })
+    // platform_search wraps adapter failures as WebError; the original
+    // ABORTED HttpError remains available as the cause.
+    await expect(pending).rejects.toMatchObject({ code: 'WEB_ABORTED', cause: { code: 'ABORTED' } })
     expect(stub.calls.length).toBeGreaterThan(0)
     expect(stub.calls[0]?.init?.signal?.aborted).toBe(true)
   })
