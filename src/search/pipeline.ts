@@ -343,16 +343,20 @@ export class SearchPipeline {
           failures.set(engineId, lastError)
           continue
         }
-        const fallback = engineId === preferredId
+        const preferredFailure = engineId === preferredId
           ? undefined
           : failures.get(preferredId) ?? (timeRange !== undefined && !supportsTimeRange(preferredId)
             ? `does not support time filtering (${timeRangeLabel(timeRange)})`
             : 'unavailable')
+        const timeFilterNote = timeRange !== undefined && !supportsTimeRange(engineId)
+          ? `Note: ${engineId} does not support time filtering (${timeRangeLabel(timeRange)}); results are not time-filtered.`
+          : undefined
         const content = joinNotes([
           enhancement?.enhanced === true
             ? `[enhanced] "${enhancement.original ?? query}" -> "${enhancement.query}"`
             : undefined,
-          fallback === undefined ? undefined : `Note: ${preferredId} ${fallback}; used ${engineId}.`,
+          preferredFailure === undefined ? undefined : `Note: ${preferredId} ${preferredFailure}; used ${engineId}.`,
+          timeFilterNote,
         ])
         const result: PipelineResult = {
           sources: normalized,

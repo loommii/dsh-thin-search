@@ -111,6 +111,32 @@ describe('SearchPipeline fallback', () => {
     expect(result.content).toContain('used anysearch')
   })
 
+  it('notes when the answering engine cannot apply the requested time filter', async () => {
+    const pipeline = new SearchPipeline({
+      getConfig: () => testConfig({ provider: 'bing' }),
+      http: textHttp(''),
+      engines: [fakeEngine('bing', async () => sources('https://example.com/bing'))],
+    })
+    const result = await pipeline.search({ query: 'filtered', timeRange: 'week' })
+    expect(result.engine).toBe('bing')
+    expect(result.content).toContain('Note: bing does not support time filtering (7d); results are not time-filtered.')
+  })
+
+  it('keeps the fallback note and the time-filter note together', async () => {
+    const pipeline = new SearchPipeline({
+      getConfig: () => testConfig({ provider: 'searxng' }),
+      http: textHttp(''),
+      engines: [
+        fakeEngine('searxng', async () => { throw new Error('HTTP 500') }, true),
+        fakeEngine('bing', async () => sources('https://example.com/bing')),
+      ],
+    })
+    const result = await pipeline.search({ query: 'fallback and filter', timeRange: 'week' })
+    expect(result.engine).toBe('bing')
+    expect(result.content).toContain('used bing')
+    expect(result.content).toContain('Note: bing does not support time filtering (7d); results are not time-filtered.')
+  })
+
   it('falls back when an engine returns zero results', async () => {
     const pipeline = new SearchPipeline({
       getConfig: () => testConfig(),
