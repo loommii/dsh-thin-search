@@ -54,7 +54,7 @@ export const searxngEngine: SearchEngine = {
     const failures: string[] = []
     for (const instance of instances) {
       try {
-        const endpoint = new URL('/search', instance)
+        const endpoint = new URL(`${instance.replace(/\/+$/u, '')}/search`)
         endpoint.searchParams.set('q', context.query)
         endpoint.searchParams.set('format', 'json')
         if (tier !== undefined) endpoint.searchParams.set('time_range', tier)
