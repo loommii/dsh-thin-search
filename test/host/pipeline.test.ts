@@ -34,6 +34,15 @@ describe('engine chain', () => {
     expect(buildEngineChain('ddg', { days: 7 }, ENGINES)).toEqual(['ddg', 'searxng', 'ddg-lite', 'bing', 'anysearch'])
   })
 
+  it('derives time filtering from engine objects, not from engine ids', () => {
+    // An id-based implementation would put the id-ddg engine first and the
+    // id-bing engine last; these flipped capability objects must drive the order.
+    const bingTimeCapable = fakeEngine('bing', async () => [], true)
+    const ddgNotTimeCapable = fakeEngine('ddg', async () => [], false)
+    expect(buildEngineChain('bing', { days: 7 }, [bingTimeCapable, ddgNotTimeCapable])).toEqual(['bing', 'ddg'])
+    expect(buildEngineChain('ddg', { days: 7 }, [bingTimeCapable, ddgNotTimeCapable])).toEqual(['bing', 'ddg'])
+  })
+
   it('splits the remaining budget fairly across the engines still to try', () => {
     expect(MIN_ENGINE_BUDGET_MS).toBe(6_000)
     expect(computeEngineBudget(35_000, 5, 12_000)).toBe(7_000)
