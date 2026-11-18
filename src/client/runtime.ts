@@ -48,8 +48,8 @@ export interface SettingsSnapshot {
   readonly revision: number | undefined
   /** Normalized settings values. */
   readonly values: Draft
-  /** Field validation error from the latest write attempt. */
-  readonly error: DraftError | null
+  /** Validation errors keyed by the field that produced them. */
+  readonly errors: Partial<Record<keyof Draft, DraftError>>
   /** Whether the Host refused the latest write. */
   readonly writeFailed: boolean
 }
@@ -61,7 +61,7 @@ function loadingSnapshot(): SettingsSnapshot {
     writable: false,
     revision: undefined,
     values: normalizeDraft(undefined),
-    error: null,
+    errors: {},
     writeFailed: false,
   }
 }
@@ -113,7 +113,7 @@ export class ThinSearchRuntime implements EngineCommandSource {
   attach(form: ConfigForm<ThinSearchValues>): () => void {
     this.form = form
     this.pending.clear()
-    this.sync(form.getSnapshot(), { error: null, writeFailed: false })
+    this.sync(form.getSnapshot(), { errors: {}, writeFailed: false })
     const off = form.subscribe(() => { this.sync(form.getSnapshot()) })
     return () => {
       off()
@@ -151,13 +151,19 @@ export class ThinSearchRuntime implements EngineCommandSource {
     if (form === undefined || this.snapshot.status !== 'ready' || !this.snapshot.writable) return false
     const error = validateSetting(field, value)
     if (error !== undefined) {
-      this.publish({ ...this.snapshot, error, writeFailed: false })
+      this.publish({
+        ...this.snapshot,
+        errors: { ...this.snapshot.errors, [field]: error },
+        writeFailed: false,
+      })
       return false
     }
     const optimistic = { ...this.snapshot.values }
     optimistic[field] = value
+    const errors = { ...this.snapshot.errors }
+    delete errors[field]
     this.pending.add(field)
-    this.publish({ ...this.snapshot, values: optimistic, error: null, writeFailed: false })
+    this.publish({ ...this.snapshot, values: optimistic, errors, writeFailed: false })
     const write = settingWrite(field, value)
     try {
       const accepted = await form.set(write.field, write.value)
@@ -218,7 +224,7 @@ export class ThinSearchRuntime implements EngineCommandSource {
       writable: formSnapshot.writable,
       revision: formSnapshot.revision,
       values,
-      error: this.snapshot.error,
+      errors: this.snapshot.errors,
       writeFailed: this.snapshot.writeFailed,
       ...overrides,
     })
