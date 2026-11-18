@@ -29,10 +29,12 @@ does not carry compatibility branches for DSH 0.1.x, 0.2.0 or 0.2.1.
   Each forwards `exec.signal`, declares `timeoutMs` and renders `ContentBlock[]`.
 - Dynamic system-prompt section that names the selected provider and the enabled
   platform limits.
-- A native `plugins.row.config` page on the Plugins page and the
-  `/thin-search-engine` command. Both write through ConfigForms; the global
-  provider switch writes `web.searchProvider` immediately, with no restart and
-  no profile patch write.
+- A native `plugins.bundle.config` settings card on the installed bundle page
+  (Plugins → Installed → dsh-thin-search → Configuration) and the
+  `/thin-search-engine` command. The card is not a Plugins row configuration and
+  has no global Settings item. Both surfaces write through ConfigForms; the
+  global provider switch writes `web.searchProvider` immediately, with no
+  restart and no profile patch write.
 - Integration suite under `test/integration/` covering provider registration,
   config schema, cache/time-range, tool cancellation, URL validation, the built
   client form mapping and release packaging.
@@ -55,6 +57,12 @@ does not carry compatibility branches for DSH 0.1.x, 0.2.0 or 0.2.1.
   `web.fetchProvider: http`; every later provider switch goes through ConfigForms.
 - Search requests now use the global `fetch` implementation and the DSH HTTP
   client; there is no plugin-level proxy, custom bridge or private YAML/JSON store.
+- The settings entry is the installed bundle's configuration card:
+  `plugins.bundle.config` keyed by `dsh-thin-search` and reached through
+  Plugins → Installed → dsh-thin-search → Configuration. It is not a Plugins row
+  configuration and there is no global Settings item.
+- Every settings control writes its field immediately through `ConfigForm.set`;
+  the owner form props and the Save/Discard footer are gone.
 
 ### Removed
 
@@ -89,7 +97,7 @@ does not carry compatibility branches for DSH 0.1.x, 0.2.0 or 0.2.1.
    bundle patch now pins the provider once; later switches use
    `configForms.get("web").set("searchProvider", id)` and apply live.
 6. Provider id `thin-search` and the three tool names are unchanged, so existing
-   Agent instructions keep working. The `thin-search` row config keeps the same
+   Agent instructions keep working. The `thin-search` settings schema keeps the same
    field names for engines, platforms, enhancement and market/region.
 7. Delete `tools.mode` and `tools.maxParallelSubCalls` from the `tools` row in the
    profile patch. DSH 0.2.2-rc.3 declares both fields as `z.never()` and rejects
@@ -118,17 +126,24 @@ locale keys and patch file are frozen for the v1.0.0 release.
 These are client-side polish items recorded by the v1.0.0 cross-review. They do
 not affect search, configuration persistence or provider switching.
 
-- Windows/UNC prompt paths: `enhanceSystemPromptPath` validation on the page only
-  accepts `~/` or a leading `/`; a Windows drive path is rejected by the form
-  even though the Host resolver accepts it.
-- Field errors are not cleared as soon as the offending value is corrected; they
-  clear on the next save or discard.
-- The provider select briefly shows the selected id as "(not registered)" while the
-  first `listProviders` read is still loading.
-- The page uses `h2`/`h3` headings without a surrounding page-level `h1`.
-- `platform_search` surfaces cancellation as the HTTP client error code
-  `ABORTED`, while `advanced_search` surfaces `WEB_ABORTED`. The signal is
-  forwarded correctly in both paths; the code naming will be aligned in v1.0.1.
+- F1: a global error slot can be cleared by an unrelated successful write while an
+  invalid text draft is reset; the error should stay scoped to its field.
+- F2: `PillSelect` `aria-labelledby` names the control but omits the current value;
+  screen readers should hear the selected label.
+- F3: the pill menu has no flip, max-height or overflow handling, so it can be
+  clipped near the viewport edge.
+- F5: Windows/UNC prompt paths are rejected by the page validation; the Host
+  accepts platform absolute paths (including `C:\\...` on Windows), so the page is
+  the blocker. The platform-specific path form will be added in v1.0.1.
+- F6: rapid same-field optimistic writes can briefly revert the displayed value
+  until the Host snapshot settles.
+- Test gaps to close with those fixes: runtime writable/status guard, page
+  write-failure note and `PillSelect` keyboard interaction.
+
+Live-GUI verification limitation: v1.0.0 was verified with unit, SSR and
+interaction tests, the built-bundle ModuleLoader smoke and the integration
+harness; the installed-plugin configuration page was not exercised in a running
+DSH GUI in this environment.
 
 ## [0.6.0] - 2026-09-26
 

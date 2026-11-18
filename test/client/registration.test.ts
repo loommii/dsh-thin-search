@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { apply, inject } from '../../src/client/index'
-import { COMMAND_NAME, ROW_CONFIG_KEY, THIN_SEARCH_NAMESPACE } from '../../src/client/config'
+import { BUNDLE_CONFIG_KEY, BUNDLE_CONFIG_SLOT, COMMAND_NAME, THIN_SEARCH_NAMESPACE } from '../../src/client/config'
 import { DICTIONARIES } from '../../src/client/locales'
 import { commandNamed, createFakeContext, flushMicrotasks } from './helpers'
 
 describe('client plugin registration', () => {
-  it('declares the services the page and command require', () => {
+  it('declares the services the card and command require', () => {
     expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.web', 'configForms'])
   })
 
@@ -17,35 +17,40 @@ describe('client plugin registration', () => {
     expect(context.locale.registrations[0]?.dictionaries).toBe(DICTIONARIES)
   })
 
-  it('guards the row configuration with configForms.whileServed(["thin-search"])', () => {
+  it('registers only the bundle card inside configForms.whileServed(["thin-search"])', () => {
     const context = createFakeContext()
     apply(context)
     expect(context.records.whileServedCalls).toEqual([[THIN_SEARCH_NAMESPACE]])
     expect(context.records.registrations).toHaveLength(1)
     expect(context.records.registrations[0]?.options).toEqual({
-      name: 'plugins.row.config',
-      key: ROW_CONFIG_KEY,
+      name: BUNDLE_CONFIG_SLOT,
+      key: BUNDLE_CONFIG_KEY,
+      locale: 'thin-search',
     })
-    expect(ROW_CONFIG_KEY).toBe('dsh-thin-search#thin-search')
+    expect(BUNDLE_CONFIG_SLOT).toBe('plugins.bundle.config')
+    expect(BUNDLE_CONFIG_KEY).toBe('dsh-thin-search')
   })
 
-  it('does not mount the row page when the Host serves no thin-search namespace', () => {
+  it('does not register plugins.row.config or settings.section', () => {
+    const context = createFakeContext()
+    apply(context)
+    const names = context.records.registrations.map((entry) => entry.options.name)
+    expect(names).not.toContain('plugins.row.config')
+    expect(names).not.toContain('settings.section')
+  })
+
+  it('does not mount the card when the Host serves no thin-search namespace', () => {
     const context = createFakeContext({ served: [] })
     apply(context)
     expect(context.records.registrations).toEqual([])
   })
 
-  it('does not register the legacy settings.section card', () => {
+  it('renders the page bundle view with no owner form props', () => {
     const context = createFakeContext()
     apply(context)
-    expect(context.records.registrations.filter((entry) => entry.options.name === 'settings.section')).toEqual([])
-  })
-
-  it('renders the summary view as localized text', () => {
-    const context = createFakeContext()
-    apply(context)
-    const component = context.records.registrations[0]?.component as (props: { view: 'summary' }) => unknown
-    expect(component({ view: 'summary' })).toBe(DICTIONARIES.en?.['summary'])
+    const component = context.records.registrations[0]?.component as (props: { view: 'page' }) => unknown
+    expect(() => component({ view: 'page' })).not.toThrow()
+    expect(component({ view: 'page' })).toBeTruthy()
   })
 
   it('registers the /thin-search-engine command through the command UI', () => {
@@ -61,24 +66,19 @@ describe('client plugin registration', () => {
     apply(context)
     const command = commandNamed(context, COMMAND_NAME)
     await command.ui.onSelect({ id: 'searxng', label: 'SearXNG' }, {})
-    expect(context.forms.get(THIN_SEARCH_NAMESPACE)?.calls).toEqual([{ kind: 'set', field: 'provider', value: 'searxng' }])
+    expect(context.forms.get(THIN_SEARCH_NAMESPACE)?.calls).toEqual([{ kind: 'set', field: 'provider', value: 'searxng', revision: 0 }])
   })
 
-  it('keeps the page working when the command UI is absent', () => {
+  it('keeps the card working when the command UI is absent', () => {
     const context = createFakeContext({ withCommandUi: false })
     expect(() => { apply(context) }).not.toThrow()
     expect(context.records.registrations).toHaveLength(1)
     expect(context.records.commands).toEqual([])
   })
 
-  it('does not read the provider list before the row page renders', async () => {
+  it('does not read the provider list before the bundle card renders', async () => {
     const context = createFakeContext()
     apply(context)
-    const component = context.records.registrations[0]?.component as (props: { view: 'summary' }) => unknown
-    expect(component({ view: 'summary' })).toBeTruthy()
-    // The provider read is lazy: the page's effect calls ensureProviders when it
-    // first renders. Rendering is covered by page.test.tsx; here assert that
-    // applying the plugin does not read the Host before the page exists.
     await flushMicrotasks()
     expect(context.records.providerReads).toBe(0)
   })

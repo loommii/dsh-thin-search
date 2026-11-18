@@ -12,21 +12,12 @@ import type { EngineId, PlatformId } from './config'
 
 /** English dictionary; its key union is the namespace's message key type. */
 export const en = {
-  summary: 'Free, keyless web search with engine fallback, result caching, optional model enhancement, and platform search.',
-  'page.title': 'Thin Search',
-  'page.intro': 'Free, keyless web search. Choose the provider that serves web search, then tune the free engines behind Thin Search.',
-
   'status.loading': 'Loading settings…',
   'status.unavailable': 'Thin Search settings are not served by this deployment.',
   'status.readOnly': 'This deployment stores settings read-only.',
-  'status.unsaved': 'Unsaved changes',
-  'status.saved': 'Saved',
-  'status.saveFailed': 'Save failed. The Host rejected the change.',
-  'status.saving': 'Saving…',
-  'status.invalid': 'Fix the highlighted fields before saving.',
+  'status.writeFailed': 'The Host refused the change.',
 
-  'actions.save': 'Save',
-  'actions.discard': 'Discard changes',
+  'settings.clear': 'Clear',
 
   'provider.title': 'Search provider',
   'provider.description': 'Which provider answers web search and the web_search tool for every Agent.',
@@ -86,7 +77,7 @@ export const en = {
   'advanced.regionHint': 'DuckDuckGo kl value, for example cn-zh; empty leaves the default.',
   'advanced.searxngLabel': 'SearXNG instances',
   'advanced.searxngPlaceholder': 'https://searx.example.com',
-  'advanced.searxngHint': 'One absolute http(s) base URL per line. Empty uses the built-in instance list.',
+  'advanced.searxngHint': 'One absolute http(s) base URL per line. Shift+Enter adds a line; Enter saves. Empty uses the built-in instance list.',
 
   'validation.cacheTtl': 'Use a whole number of minutes, 0 or greater.',
   'validation.enhanceSystemPromptPath': 'Use ~/... or an absolute path.',
@@ -105,21 +96,12 @@ export type MessageKey = keyof typeof en
 
 /** Chinese dictionary, key-for-key identical to {@link en}. */
 export const zh: Record<MessageKey, string> = {
-  summary: '免密钥的免费网页搜索：引擎回退、结果缓存、可选模型增强与平台搜索。',
-  'page.title': 'Thin Search',
-  'page.intro': '免费、免密钥的网页搜索。先选择提供网页搜索的提供方，再调整 Thin Search 使用的免费引擎。',
-
   'status.loading': '正在加载设置…',
   'status.unavailable': '当前部署未提供 Thin Search 设置。',
   'status.readOnly': '当前部署的设置为只读。',
-  'status.unsaved': '有未保存的修改',
-  'status.saved': '已保存',
-  'status.saveFailed': '保存失败：Host 拒绝了这次修改。',
-  'status.saving': '正在保存…',
-  'status.invalid': '请先修正标出的字段再保存。',
+  'status.writeFailed': 'Host 拒绝了这次修改。',
 
-  'actions.save': '保存',
-  'actions.discard': '撤销修改',
+  'settings.clear': '清除',
 
   'provider.title': '搜索提供方',
   'provider.description': '选择由哪个提供方为所有 Agent 的网页搜索与 web_search 工具提供结果。',
@@ -179,7 +161,7 @@ export const zh: Record<MessageKey, string> = {
   'advanced.regionHint': 'DuckDuckGo kl 值，例如 cn-zh；留空使用默认。',
   'advanced.searxngLabel': 'SearXNG 实例',
   'advanced.searxngPlaceholder': 'https://searx.example.com',
-  'advanced.searxngHint': '每行一个绝对 http(s) 基础 URL。留空使用内置实例列表。',
+  'advanced.searxngHint': '每行一个绝对 http(s) 基础 URL。Shift+Enter 换行，Enter 保存。留空使用内置实例列表。',
 
   'validation.cacheTtl': '请填写大于或等于 0 的整数分钟数。',
   'validation.enhanceSystemPromptPath': '请使用 ~/... 或绝对路径。',

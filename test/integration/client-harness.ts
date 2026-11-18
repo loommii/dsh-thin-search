@@ -4,9 +4,10 @@
  * stateful React stand-in.
  *
  * The harness is deliberately independent of `test/client`: it proves that the
- * shipped bundle — not the TypeScript sources — registers the row page, maps the
- * owner form to native controls, saves through `form.mutate`, switches the
- * global provider through `configForms.get('web')`, and registers the
+ * shipped bundle registers `plugins.bundle.config` keyed by the package name,
+ * renders the card without owner form props, writes each control immediately
+ * through `configForms.get('thin-search')`, switches the global provider
+ * through `configForms.get('web')`, and registers the
  * `/thin-search-engine` command.
  */
 import { readFileSync } from 'node:fs'
@@ -34,15 +35,25 @@ export interface FakeForm {
   readonly calls: FormCall[]
 }
 
+/** Options for the ConfigForm double. */
+export interface FakeFormOptions {
+  /** Host document accepts writes; defaults to true. */
+  readonly writable?: boolean
+  /** ConfigForm lifecycle state; defaults to ready. */
+  readonly status?: 'ready' | 'loading' | 'unavailable'
+  /** When false, every write is refused without changing the accepted section. */
+  readonly acceptWrites?: boolean
+}
+
 /** Build a ConfigForm double over an accepted section. */
-export function createForm(initial: Record<string, unknown>, revision = 0): FakeForm {
+export function createForm(initial: Record<string, unknown>, revision = 0, options: FakeFormOptions = {}): FakeForm {
   let state: Record<string, any> = {
-    status: 'ready',
+    status: options.status ?? 'ready',
     value: initial,
     base: undefined,
     user: undefined,
     revision,
-    writable: true,
+    writable: options.writable ?? true,
   }
   const calls: FormCall[] = []
   const listeners = new Set<() => void>()
@@ -57,6 +68,7 @@ export function createForm(initial: Record<string, unknown>, revision = 0): Fake
     }
     state = { ...state, value }
   }
+  const revisionCall = (): { revision?: number } => state.revision === undefined ? {} : { revision: state.revision }
   const form = {
     getSnapshot: () => state,
     subscribe: (listener: () => void) => {
@@ -64,14 +76,16 @@ export function createForm(initial: Record<string, unknown>, revision = 0): Fake
       return () => { listeners.delete(listener) }
     },
     async set(field: string, value: unknown) {
-      calls.push({ kind: 'set', field, value })
+      calls.push({ kind: 'set', field, value, ...revisionCall() })
+      if (options.acceptWrites === false) return false
       apply([{ op: 'set', path: [field], value }])
       state = { ...state, revision: (state.revision ?? 0) + 1 }
       notify()
       return true
     },
     async unset(field: string) {
-      calls.push({ kind: 'unset', field })
+      calls.push({ kind: 'unset', field, ...revisionCall() })
+      if (options.acceptWrites === false) return false
       apply([{ op: 'unset', path: [field] }])
       state = { ...state, revision: (state.revision ?? 0) + 1 }
       notify()
@@ -79,6 +93,7 @@ export function createForm(initial: Record<string, unknown>, revision = 0): Fake
     },
     async mutate(ops: readonly SettingsOp[], expectedRevision?: number) {
       calls.push({ kind: 'mutate', ops, ...expectedRevision === undefined ? {} : { revision: expectedRevision } })
+      if (options.acceptWrites === false) return false
       apply(ops)
       state = { ...state, revision: (state.revision ?? 0) + 1 }
       notify()
@@ -105,11 +120,15 @@ export interface ClientHarness {
   readonly dictionaries: Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, string>>>>>> 
   readonly forms: ReadonlyMap<string, FakeForm>
   readonly providerReads: () => number
-  renderSummary(): unknown
   renderPage(): RenderedElement[]
   find(control: string, id?: string): RenderedElement | undefined
+  findAll(control: string): RenderedElement[]
   change(control: string, value: string, id?: string): void
-  click(control: string): void
+  toggle(control: string, checked: boolean, id?: string): void
+  blur(control: string, id?: string): void
+  keyDown(control: string, key: string, id?: string): void
+  click(control: string, id?: string): void
+  clickOption(control: string, value: string): void
   flush(): Promise<void>
 }
 
@@ -152,7 +171,7 @@ function createReact() {
   }
   const react = {
     useState,
-    useEffect: () => undefined,
+    useEffect: (effect: () => void | (() => void)) => { effect() },
     useCallback: (fn: unknown) => fn,
     useMemo: (fn: () => unknown) => fn(),
     useRef: (current: unknown) => ({ current }),
@@ -203,6 +222,10 @@ export async function createClientHarness(options: {
   readonly thinSearch?: Record<string, unknown>
   readonly web?: Record<string, unknown>
   readonly revision?: number
+  readonly thinSearchWritable?: boolean
+  readonly webWritable?: boolean
+  readonly thinSearchStatus?: 'ready' | 'loading' | 'unavailable'
+  readonly acceptThinSearchWrites?: boolean
 } = {}): Promise<ClientHarness> {
   const source = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
   let definition: { id: string; factory(require: (specifier: string) => unknown): Record<string, any> } | undefined
@@ -212,6 +235,8 @@ export async function createClientHarness(options: {
       querySelector: () => null,
       createElement: () => ({ dataset: {} }),
       head: { appendChild: () => undefined },
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
     },
     setTimeout,
     clearTimeout,
@@ -238,8 +263,14 @@ export async function createClientHarness(options: {
     dictionaries: {} as Record<string, Record<string, Record<string, string>>>,
   }
   const forms = new Map<string, FakeForm>()
-  forms.set('thin-search', createForm(options.thinSearch ?? { provider: 'bing' }, options.revision ?? 0))
-  forms.set('web', createForm(options.web ?? { searchProvider: 'thin-search' }, options.revision ?? 0))
+  forms.set('thin-search', createForm(options.thinSearch ?? { provider: 'bing' }, options.revision ?? 0, {
+    ...options.thinSearchWritable === undefined ? {} : { writable: options.thinSearchWritable },
+    ...options.thinSearchStatus === undefined ? {} : { status: options.thinSearchStatus },
+    ...options.acceptThinSearchWrites === undefined ? {} : { acceptWrites: options.acceptThinSearchWrites },
+  }))
+  forms.set('web', createForm(options.web ?? { searchProvider: 'thin-search' }, options.revision ?? 0, {
+    ...options.webWritable === undefined ? {} : { writable: options.webWritable },
+  }))
   const locale = createLocale(records)
   let providerReads = 0
   const commandUi = {
@@ -302,20 +333,21 @@ export async function createClientHarness(options: {
   }
   exports['apply'](context)
 
-  const pageForm = {
-    state: forms.get('thin-search')?.form.getSnapshot(),
-    mutate: forms.get('thin-search')?.form.mutate,
-  }
   const renderTree = (): RenderedElement[] => {
-    const registration = records.registrations[0]
-    if (registration === undefined) throw new Error('the bundle registered no plugins.row.config entry')
+    const registration = records.registrations.find((entry) => entry.options['name'] === 'plugins.bundle.config')
+    if (registration === undefined) throw new Error('the bundle registered no plugins.bundle.config entry')
     reactState.reset()
     const elements: RenderedElement[] = []
-    walk(registration.component({ view: 'page', form: pageForm }), (element) => { elements.push(element) })
+    walk(registration.component({ view: 'page' }), (element) => { elements.push(element) })
     return elements
   }
   const find = (elements: RenderedElement[], control: string, id?: string): RenderedElement | undefined =>
     elements.find((element) => element.props['data-control'] === control && (id === undefined || element.props['id'] === id))
+  const requireTarget = (control: string, id?: string): RenderedElement => {
+    const target = find(renderTree(), control, id)
+    if (target === undefined) throw new Error(`control "${control}" is not rendered`)
+    return target
+  }
 
   const harness: ClientHarness = {
     source,
@@ -327,22 +359,44 @@ export async function createClientHarness(options: {
     dictionaries: records.dictionaries,
     forms,
     providerReads: () => providerReads,
-    renderSummary: () => {
-      const registration = records.registrations[0]
-      if (registration === undefined) throw new Error('the bundle registered no plugins.row.config entry')
-      return registration.component({ view: 'summary' })
-    },
     renderPage: renderTree,
     find: (control, id) => find(renderTree(), control, id),
+    findAll: (control) => renderTree().filter((element) => element.props['data-control'] === control),
     change: (control, value, id) => {
-      const target = find(renderTree(), control, id)
-      if (target === undefined) throw new Error(`control "${control}" is not rendered`)
+      const target = requireTarget(control, id)
+      target.props['onFocus']?.()
       target.props['onChange']({ currentTarget: { value } })
       renderTree()
     },
-    click: (control) => {
-      const target = find(renderTree(), control)
-      if (target === undefined) throw new Error(`control "${control}" is not rendered`)
+    toggle: (control, checked, id) => {
+      requireTarget(control, id).props['onChange']({ currentTarget: { checked } })
+      renderTree()
+    },
+    blur: (control, id) => {
+      requireTarget(control, id).props['onBlur']()
+      renderTree()
+    },
+    keyDown: (control, key, id) => {
+      requireTarget(control, id).props['onKeyDown']({
+        key,
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        nativeEvent: {},
+        preventDefault: () => undefined,
+        stopPropagation: () => undefined,
+      })
+      renderTree()
+    },
+    click: (control, id) => {
+      requireTarget(control, id).props['onClick']()
+      renderTree()
+    },
+    clickOption: (control, value) => {
+      const target = renderTree().find((element) =>
+        element.props['data-control'] === `${control}-option` && element.props['data-value'] === value)
+      if (target === undefined) throw new Error(`option "${value}" of "${control}" is not rendered`)
       target.props['onClick']()
       renderTree()
     },

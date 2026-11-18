@@ -1,35 +1,84 @@
 import { describe, expect, it } from 'vitest'
 import { ThinSearchRuntime } from '../../src/client/runtime'
-import { createFakeContext, createFakeForm, flushMicrotasks } from './helpers'
+import { DEFAULT_DRAFT } from '../../src/client/config'
+import { createFakeContext, createFakeForm, flushMicrotasks, type FakeForm } from './helpers'
+
+/** Attach a thin-search form double to a runtime built over a fake context. */
+function attached(options: { readonly value?: Record<string, unknown>; readonly accept?: boolean; readonly revision?: number; readonly writable?: boolean } = {}) {
+  const context = createFakeContext({
+    sections: {
+      'thin-search': options.value ?? { ...DEFAULT_DRAFT, provider: 'bing' },
+      web: { searchProvider: 'thin-search' },
+    },
+  })
+  const thin = createFakeForm({
+    value: options.value ?? { ...DEFAULT_DRAFT, provider: 'bing' },
+    ...(options.accept === undefined ? {} : { accept: options.accept }),
+    ...(options.revision === undefined ? {} : { revision: options.revision }),
+    ...(options.writable === undefined ? {} : { writable: options.writable }),
+  })
+  context.forms.set('thin-search', thin as FakeForm<unknown>)
+  const runtime = new ThinSearchRuntime(context)
+  const detach = runtime.attach(thin.form)
+  return { context, thin, runtime, detach }
+}
 
 describe('ThinSearchRuntime', () => {
+  it('holds configForms.get("thin-search") and publishes it without owner props', () => {
+    const { runtime } = attached({ revision: 3 })
+    expect(runtime.getSettingsSnapshot().status).toBe('ready')
+    expect(runtime.getSettingsSnapshot().revision).toBe(3)
+    expect(runtime.getSettingsSnapshot().values.provider).toBe('bing')
+  })
+
+  it('writes one field immediately with the current revision', async () => {
+    const { thin, runtime } = attached({ revision: 4 })
+    await expect(runtime.writeSetting('provider', 'ddg')).resolves.toBe(true)
+    expect(thin.calls).toEqual([{ kind: 'set', field: 'provider', value: 'ddg', revision: 4 }])
+    expect(runtime.getSettingsSnapshot().values.provider).toBe('ddg')
+  })
+
+  it('maps the SearXNG textarea to the instance array and trims text', async () => {
+    const { thin, runtime } = attached()
+    await runtime.writeSetting('searxngText', 'https://a.example.com/\nhttps://b.example.com')
+    await runtime.writeSetting('bingMarket', ' en-US ')
+    expect(thin.calls).toEqual([
+      { kind: 'set', field: 'searxngInstances', value: ['https://a.example.com', 'https://b.example.com'], revision: 0 },
+      { kind: 'set', field: 'bingMarket', value: 'en-US', revision: 1 },
+    ])
+  })
+
+  it('refuses an invalid value before it reaches the Host', async () => {
+    const { thin, runtime } = attached()
+    await expect(runtime.writeSetting('cacheTtl', -1)).resolves.toBe(false)
+    expect(thin.calls).toEqual([])
+    expect(runtime.getSettingsSnapshot().error?.key).toBe('validation.cacheTtl')
+  })
+
+  it('reports a Host refusal and restores the accepted values', async () => {
+    const { runtime } = attached({ accept: false })
+    await expect(runtime.writeSetting('provider', 'ddg')).resolves.toBe(false)
+    expect(runtime.getSettingsSnapshot().writeFailed).toBe(true)
+    expect(runtime.getSettingsSnapshot().values.provider).toBe('bing')
+  })
+
   it('writes the global provider through configForms.get("web").set("searchProvider", id)', async () => {
-    const context = createFakeContext()
-    const runtime = new ThinSearchRuntime(context)
+    const { context, runtime } = attached()
     await expect(runtime.setSearchProvider('thin-search')).resolves.toBe(true)
-    const calls = context.forms.get('web')?.calls ?? []
-    expect(calls).toEqual([{ kind: 'set', field: 'searchProvider', value: 'thin-search' }])
+    expect(context.forms.get('web')?.calls).toEqual([
+      { kind: 'set', field: 'searchProvider', value: 'thin-search', revision: 0 },
+    ])
   })
 
-  it('forwards a refused provider switch instead of inventing an answer', async () => {
-    const context = createFakeContext()
-    context.forms.set('web', createFakeForm({ value: { searchProvider: 'thin-search' }, accept: false }))
-    const runtime = new ThinSearchRuntime(context)
-    await expect(runtime.setSearchProvider('deepseek-official')).resolves.toBe(false)
-    expect(context.forms.get('web')?.calls).toEqual([{ kind: 'set', field: 'searchProvider', value: 'deepseek-official' }])
-  })
-
-  it('reads and writes the preferred engine through the thin-search form', async () => {
-    const context = createFakeContext({ sections: { 'thin-search': { provider: 'searxng' }, web: { searchProvider: 'thin-search' } } })
-    const runtime = new ThinSearchRuntime(context)
+  it('reads and writes the preferred engine through the attached form', async () => {
+    const { thin, runtime } = attached({ value: { provider: 'searxng' } })
     expect(runtime.currentEngine()).toBe('searxng')
     await expect(runtime.setPreferredEngine('ddg')).resolves.toBe(true)
-    expect(context.forms.get('thin-search')?.calls).toEqual([{ kind: 'set', field: 'provider', value: 'ddg' }])
+    expect(thin.calls).toEqual([{ kind: 'set', field: 'provider', value: 'ddg', revision: 0 }])
   })
 
   it('falls back to bing when the stored engine is unknown', () => {
-    const context = createFakeContext({ sections: { 'thin-search': { provider: 'altavista' }, web: {} } })
-    const runtime = new ThinSearchRuntime(context)
+    const { runtime } = attached({ value: { provider: 'altavista' } })
     expect(runtime.currentEngine()).toBe('bing')
   })
 
@@ -54,9 +103,10 @@ describe('ThinSearchRuntime', () => {
     expect(context.records.providerReads).toBe(2)
   })
 
-  it('unsubscribes from both events on dispose', () => {
-    const context = createFakeContext()
-    const runtime = new ThinSearchRuntime(context)
+  it('unsubscribes from events and returns to loading on detach', () => {
+    const { context, runtime, detach } = attached()
+    detach()
+    expect(runtime.getSettingsSnapshot().status).toBe('loading')
     runtime.dispose()
     expect(context.records.unsubscribed).toEqual(expect.arrayContaining(['remote:web/providers-changed', 'event:connection/reset']))
   })

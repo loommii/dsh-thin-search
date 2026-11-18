@@ -1,33 +1,36 @@
 /**
  * dsh-thin-search browser half: registers the locale dictionaries, the
- * `plugins.row.config` page on the Plugins page while the Host serves the
- * `thin-search` namespace, and the `/thin-search-engine` command.
+ * `plugins.bundle.config` settings card on the installed bundle's detail page
+ * while the Host serves the `thin-search` namespace, and the
+ * `/thin-search-engine` command.
  *
- * The bundle requires only `react` and `react/jsx-runtime`; services arrive
- * through the Cordis client context.
+ * Bundle configuration receives no owner form props in DSH 0.2.2-rc.3, so the
+ * runtime holds `configForms.get('thin-search')` itself. The bundle requires
+ * only `react` and `react/jsx-runtime`; services arrive through the Cordis
+ * client context.
  * @module dsh-thin-search/client
  */
 import type { ReactNode } from 'react'
 import { createEngineCommand } from './command'
 import {
+  BUNDLE_CONFIG_KEY,
+  BUNDLE_CONFIG_SLOT,
   LOCALE_NAMESPACE,
-  ROW_CONFIG_KEY,
-  ROW_CONFIG_SLOT,
   THIN_SEARCH_NAMESPACE,
 } from './config'
 import { DICTIONARIES } from './locales'
-import { ThinSearchRowConfig } from './page'
+import { ThinSearchBundleConfig } from './page'
 import { ThinSearchRuntime } from './runtime'
 import { installStyles } from './styles'
-import type { ClientContext, CommandUiService, PluginConfigViewProps } from './types'
+import type { BundleConfigViewProps, ClientContext, CommandUiService } from './types'
 
 /** Services the browser half requires before `apply` runs. */
 export const inject = ['slots', 'locale', 'remote', 'remote.web', 'configForms']
 
 /**
- * Register the page and command. The row page is mounted only while the Host
- * serves `thin-search`; the command is optional so a composition without the
- * command UI still gets the page.
+ * Register the settings card and command. The card is mounted only while the
+ * Host serves `thin-search`; the command is optional so a composition without
+ * the command UI still gets the card.
  * @param ctx - the browser plugin context.
  */
 export function apply(ctx: ClientContext): void {
@@ -36,14 +39,19 @@ export function apply(ctx: ClientContext): void {
 
   const runtime = new ThinSearchRuntime(ctx)
   ctx.effect(() => () => { runtime.dispose() }, 'thin-search: client runtime')
+  ctx.effect(() => runtime.attach(ctx.configForms.get(THIN_SEARCH_NAMESPACE)), 'thin-search: config form')
 
-  const RowConfigPage = createRowConfigComponent(runtime)
+  const BundleConfigCard = createBundleConfigComponent(runtime)
   ctx.effect(
     () => ctx.configForms.whileServed([THIN_SEARCH_NAMESPACE], () => ctx.slots.inject(
-      ROW_CONFIG_SLOT,
-      () => ctx.slots.register({ name: ROW_CONFIG_SLOT, key: ROW_CONFIG_KEY }, RowConfigPage),
+      BUNDLE_CONFIG_SLOT,
+      () => ctx.slots.register({
+        name: BUNDLE_CONFIG_SLOT,
+        key: BUNDLE_CONFIG_KEY,
+        locale: LOCALE_NAMESPACE,
+      }, BundleConfigCard),
     )),
-    'thin-search: plugin manager row configuration',
+    'thin-search: bundle settings card',
   )
 
   ctx.inject(['commandUi'], (commandCtx) => {
@@ -56,16 +64,12 @@ export function apply(ctx: ClientContext): void {
   })
 }
 
-/**
- * Close the runtime over the component the slot registry stores. The page
- * function is called directly so the `summary` view returns its one-line
- * string, exactly as the Plugins page expects.
- */
-function createRowConfigComponent(runtime: ThinSearchRuntime) {
-  return function ThinSearchRowConfigPage(props: PluginConfigViewProps): ReactNode {
-    return ThinSearchRowConfig({ ...props, runtime })
+/** Close the runtime over the component the bundle slot stores. */
+function createBundleConfigComponent(runtime: ThinSearchRuntime) {
+  return function ThinSearchBundleConfigPage(_props: BundleConfigViewProps): ReactNode {
+    return <ThinSearchBundleConfig runtime={runtime} />
   }
 }
 
-export { ThinSearchRowConfig } from './page'
-export { COMMAND_NAME, ROW_CONFIG_KEY, THIN_SEARCH_NAMESPACE, WEB_NAMESPACE } from './config'
+export { ThinSearchBundleConfig } from './page'
+export { BUNDLE_CONFIG_KEY, BUNDLE_CONFIG_SLOT, COMMAND_NAME, THIN_SEARCH_NAMESPACE, WEB_NAMESPACE } from './config'
