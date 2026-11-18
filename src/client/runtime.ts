@@ -72,7 +72,11 @@ export class ThinSearchRuntime implements EngineCommandSource {
   private readonly translate: (key: string, params?: Record<string, unknown>) => string
   private readonly disposers: (() => void)[]
   private readonly listeners = new Set<() => void>()
-  private readonly pending = new Set<keyof Draft>()
+  /** In-flight form writes, keyed by field and tagged with their write token. */
+  private readonly pending = new Map<keyof Draft, number>()
+  /** Latest write token per field; a stale settlement must not clear newer state. */
+  private readonly writeTokens = new Map<keyof Draft, number>()
+  private writeSequence = 0
   private form: ConfigForm<ThinSearchValues> | undefined
   private snapshot: SettingsSnapshot = loadingSnapshot()
 
@@ -113,6 +117,7 @@ export class ThinSearchRuntime implements EngineCommandSource {
   attach(form: ConfigForm<ThinSearchValues>): () => void {
     this.form = form
     this.pending.clear()
+    this.writeTokens.clear()
     this.sync(form.getSnapshot(), { errors: {}, writeFailed: false })
     const off = form.subscribe(() => { this.sync(form.getSnapshot()) })
     return () => {
@@ -120,6 +125,7 @@ export class ThinSearchRuntime implements EngineCommandSource {
       if (this.form !== form) return
       this.form = undefined
       this.pending.clear()
+      this.writeTokens.clear()
       this.snapshot = loadingSnapshot()
       this.notify()
     }
@@ -149,6 +155,10 @@ export class ThinSearchRuntime implements EngineCommandSource {
   async writeSetting<K extends keyof Draft>(field: K, value: Draft[K]): Promise<boolean> {
     const form = this.form
     if (form === undefined || this.snapshot.status !== 'ready' || !this.snapshot.writable) return false
+    // Every attempt, including a validation rejection, becomes the field's
+    // latest write. An older form.set settlement must not erase the newer error.
+    const token = ++this.writeSequence
+    this.writeTokens.set(field, token)
     const error = validateSetting(field, value)
     if (error !== undefined) {
       this.publish({
@@ -160,19 +170,15 @@ export class ThinSearchRuntime implements EngineCommandSource {
     }
     const optimistic = { ...this.snapshot.values }
     optimistic[field] = value
-    this.pending.add(field)
+    this.pending.set(field, token)
     this.publish({ ...this.snapshot, values: optimistic, writeFailed: false })
     const write = settingWrite(field, value)
-    const clearError = (): Partial<Record<keyof Draft, DraftError>> | undefined => {
-      if (this.snapshot.errors[field] === undefined) return undefined
-      const errors = { ...this.snapshot.errors }
-      delete errors[field]
-      return errors
-    }
     try {
       const accepted = await form.set(write.field, write.value)
-      this.pending.delete(field)
-      const errors = accepted ? clearError() : undefined
+      if (this.pending.get(field) === token) this.pending.delete(field)
+      const errors = accepted && this.writeTokens.get(field) === token
+        ? this.withoutFieldError(field)
+        : undefined
       if (this.form === form) {
         this.sync(form.getSnapshot(), accepted
           ? errors === undefined ? {} : { errors }
@@ -180,10 +186,18 @@ export class ThinSearchRuntime implements EngineCommandSource {
       }
       return accepted
     } catch {
-      this.pending.delete(field)
+      if (this.pending.get(field) === token) this.pending.delete(field)
       if (this.form === form) this.sync(form.getSnapshot(), { writeFailed: true })
       return false
     }
+  }
+
+  /** Copy the field errors without one field's entry. */
+  private withoutFieldError(field: keyof Draft): Partial<Record<keyof Draft, DraftError>> | undefined {
+    if (this.snapshot.errors[field] === undefined) return undefined
+    const errors = { ...this.snapshot.errors }
+    delete errors[field]
+    return errors
   }
 
   /** Switch the global search provider through ConfigForms. */
@@ -227,7 +241,7 @@ export class ThinSearchRuntime implements EngineCommandSource {
   private sync(formSnapshot: ConfigFormSnapshot<ThinSearchValues>, overrides: Partial<SettingsSnapshot> = {}): void {
     const values = normalizeDraft(formSnapshot.value)
     const merged = values as unknown as Record<keyof Draft, unknown>
-    for (const field of this.pending) merged[field] = this.snapshot.values[field]
+    for (const field of this.pending.keys()) merged[field] = this.snapshot.values[field]
     this.publish({
       status: formSnapshot.status,
       writable: formSnapshot.writable,

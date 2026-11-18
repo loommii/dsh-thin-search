@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ThinSearchRuntime } from '../../src/client/runtime'
-import { DEFAULT_DRAFT } from '../../src/client/config'
+import { DEFAULT_DRAFT, type ThinSearchValues } from '../../src/client/config'
+import type { ConfigForm } from '../../src/client/types'
 import { createFakeContext, createFakeForm, flushMicrotasks, type FakeForm } from './helpers'
 
 /** Attach a thin-search form double to a runtime built over a fake context. */
@@ -71,6 +72,40 @@ describe('ThinSearchRuntime', () => {
     expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath?.key).toBe('validation.enhanceSystemPromptPath')
     await expect(runtime.writeSetting('enhanceSystemPromptPath', '/tmp/prompt.md')).resolves.toBe(false)
     expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath?.key).toBe('validation.enhanceSystemPromptPath')
+  })
+
+  it('ignores an older accepted write when the field has a newer validation error (C24-F1)', async () => {
+    const context = createFakeContext({
+      sections: { 'thin-search': { ...DEFAULT_DRAFT, provider: 'bing' }, web: { searchProvider: 'thin-search' } },
+    })
+    const thin = createFakeForm({ value: { ...DEFAULT_DRAFT, provider: 'bing' } })
+    context.forms.set('thin-search', thin as FakeForm<unknown>)
+    const originalSet = thin.form.set.bind(thin.form)
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    let first = true
+    const deferredForm = {
+      ...thin.form,
+      async set(field: string, value: unknown) {
+        if (first) {
+          first = false
+          await gate
+        }
+        return originalSet(field, value)
+      },
+    } as unknown as ConfigForm<ThinSearchValues>
+    const runtime = new ThinSearchRuntime(context)
+    runtime.attach(deferredForm)
+
+    const oldWrite = runtime.writeSetting('enhanceSystemPromptPath', '/old/prompt.md')
+    await expect(runtime.writeSetting('enhanceSystemPromptPath', 'relative.md')).resolves.toBe(false)
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath?.key).toBe('validation.enhanceSystemPromptPath')
+    release()
+    await expect(oldWrite).resolves.toBe(true)
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath?.key).toBe('validation.enhanceSystemPromptPath')
+
+    await expect(runtime.writeSetting('enhanceSystemPromptPath', '/new/prompt.md')).resolves.toBe(true)
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath).toBeUndefined()
   })
 
   it('reports a Host refusal and restores the accepted values', async () => {
