@@ -1,6 +1,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { WebError } from '@deepseek-ai/dsh-web'
 import { PLATFORM_IDS, isPlatformId } from '../platforms'
+import { clampMaxResults } from '../search/pipeline'
 import { isHttpError } from '../search/http'
 import { escapeMarkdownLabel, renderSourceLine } from './markdown'
 import type { ToolHostDeps } from './types'
@@ -71,7 +72,7 @@ export function createPlatformSearchTool(deps: ToolHostDeps) {
       }
       const query = args.query.trim()
       if (query.length === 0) throw new Error('query is required')
-      const limit = Math.min(Math.max(Math.trunc(args.maxResults ?? 5), 1), 10)
+      const limit = clampMaxResults(args.maxResults)
       let sources: Awaited<ReturnType<typeof deps.platforms.search>>
       try {
         sources = await deps.platforms.search(platform, query, limit, exec.signal)
