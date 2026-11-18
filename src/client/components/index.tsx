@@ -85,6 +85,10 @@ export function PillSelect({ id, control, label, value, options, disabled, place
   const selectedLabel = selected?.label ?? (value === '' ? placeholder ?? '' : value)
 
   useEffect(() => {
+    if (disabled === true) setOpen(false)
+  }, [disabled])
+
+  useEffect(() => {
     if (!open) return
     const selectedIndex = options.findIndex((option) => option.id === value)
     focusNode(optionRefs.current[selectedIndex >= 0 ? selectedIndex : 0])
@@ -127,7 +131,17 @@ export function PillSelect({ id, control, label, value, options, disabled, place
   }
 
   return (
-    <span className="dsts-settings-pillwrap" ref={wrapRef}>
+    <span
+      className="dsts-settings-pillwrap"
+      data-control={`${control}-wrap`}
+      ref={wrapRef}
+      onBlur={(event) => {
+        const next = event.relatedTarget
+        const wrap = wrapRef.current
+        if (next !== null && wrap !== null && typeof wrap.contains === 'function' && wrap.contains(next as Node)) return
+        setOpen(false)
+      }}
+    >
       <button
         ref={buttonRef}
         id={id}
