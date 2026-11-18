@@ -52,7 +52,17 @@ describe('ThinSearchRuntime', () => {
     const { thin, runtime } = attached()
     await expect(runtime.writeSetting('cacheTtl', -1)).resolves.toBe(false)
     expect(thin.calls).toEqual([])
-    expect(runtime.getSettingsSnapshot().error?.key).toBe('validation.cacheTtl')
+    expect(runtime.getSettingsSnapshot().errors.cacheTtl?.key).toBe('validation.cacheTtl')
+  })
+
+  it('keeps a field error across another field write and clears it on its own success', async () => {
+    const { runtime } = attached()
+    await expect(runtime.writeSetting('enhanceSystemPromptPath', 'prompt.md')).resolves.toBe(false)
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath?.key).toBe('validation.enhanceSystemPromptPath')
+    await expect(runtime.writeSetting('platforms', ['github'])).resolves.toBe(true)
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath?.key).toBe('validation.enhanceSystemPromptPath')
+    await expect(runtime.writeSetting('enhanceSystemPromptPath', '/tmp/prompt.md')).resolves.toBe(true)
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath).toBeUndefined()
   })
 
   it('reports a Host refusal and restores the accepted values', async () => {

@@ -13,6 +13,7 @@ import { createFakeContext, type FakeForm } from './helpers'
 async function mount(): Promise<{
   readonly context: ReturnType<typeof createFakeContext>
   readonly thin: FakeForm<unknown>
+  readonly runtime: ThinSearchRuntime
   readonly renderer: ReactTestRenderer
 }> {
   const context = createFakeContext({
@@ -37,7 +38,7 @@ async function mount(): Promise<{
   await act(async () => {
     renderer = create(<ThinSearchBundleConfig runtime={runtime} />)
   })
-  return { context, thin, renderer }
+  return { context, thin, runtime, renderer }
 }
 
 /** Click one pill option after opening its menu. */
@@ -121,6 +122,32 @@ describe('Thin Search bundle card interactions', () => {
     })
     expect(thin.calls).toEqual([])
     expect(renderer.root.findByProps({ 'data-control': 'enhance-model' }).props['value']).toBe('')
+  })
+
+  it('keeps a field error and draft across another field write, then clears both on its own write (F1)', async () => {
+    const { runtime, renderer } = await mount()
+    const draftPath = (): ReactTestRenderer['root'] => renderer.root
+    const path = draftPath().findByProps({ 'data-control': 'enhance-prompt-path' })
+    await act(async () => { path.props.onFocus() })
+    await act(async () => { path.props.onChange({ currentTarget: { value: 'prompt.md' } }) })
+    await act(async () => { draftPath().findByProps({ 'data-control': 'enhance-prompt-path' }).props.onBlur() })
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath?.key).toBe('validation.enhanceSystemPromptPath')
+    expect(draftPath().findByProps({ 'data-control': 'enhance-prompt-path' }).props['value']).toBe('prompt.md')
+    expect(draftPath().findAllByProps({ role: 'alert' }).length).toBeGreaterThan(0)
+
+    const v2ex = draftPath().findByProps({ id: 'dsts-platform-v2ex' })
+    await act(async () => { v2ex.props.onChange({}) })
+    await act(async () => { await Promise.resolve() })
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath?.key).toBe('validation.enhanceSystemPromptPath')
+    expect(draftPath().findByProps({ 'data-control': 'enhance-prompt-path' }).props['value']).toBe('prompt.md')
+
+    const fixed = draftPath().findByProps({ 'data-control': 'enhance-prompt-path' })
+    await act(async () => { fixed.props.onFocus() })
+    await act(async () => { fixed.props.onChange({ currentTarget: { value: '/tmp/prompt.md' } }) })
+    await act(async () => { draftPath().findByProps({ 'data-control': 'enhance-prompt-path' }).props.onBlur() })
+    await act(async () => { await Promise.resolve() })
+    expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath).toBeUndefined()
+    expect(draftPath().findByProps({ 'data-control': 'enhance-prompt-path' }).props['value']).toBe('/tmp/prompt.md')
   })
 
   it('switches the global provider through configForms.get("web").set("searchProvider", id)', async () => {

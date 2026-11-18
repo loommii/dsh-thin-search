@@ -15,7 +15,7 @@ import {
   PLATFORM_IDS,
   canonicalPlatforms,
   isEngineId,
-  type DraftErrorKey,
+  type Draft,
   type PlatformId,
 } from './config'
 import { Group, Note, PillSelect, Row, SwitchRow, TextControl, type PillOption } from './components'
@@ -46,8 +46,12 @@ export function ThinSearchBundleConfig({ runtime }: ThinSearchBundleConfigProps)
 
   useEffect(() => { runtime.ensureProviders() }, [runtime])
 
-  const fieldError = (key: DraftErrorKey): string | undefined =>
-    settings.error?.key === key ? t(settings.error.key, settings.error.params) : undefined
+  const fieldError = (field: keyof Draft): string | undefined => {
+    const error = settings.errors[field]
+    return error === undefined ? undefined : t(error.key, error.params)
+  }
+  const errorNotes = Object.values(settings.errors).flatMap((error) =>
+    error === undefined ? [] : [t(error.key, error.params)])
 
   const pickProvider = async (id: string): Promise<void> => {
     setProviderError(false)
@@ -78,6 +82,7 @@ export function ThinSearchBundleConfig({ runtime }: ThinSearchBundleConfigProps)
       {settings.status === 'unavailable' ? <Note role="status">{t('status.unavailable')}</Note> : null}
       {settings.status === 'ready' && !settings.writable ? <Note role="status">{t('status.readOnly')}</Note> : null}
       {settings.writeFailed ? <Note role="alert" error>{t('status.writeFailed')}</Note> : null}
+      {errorNotes.length === 0 ? null : <Note role="alert" error>{errorNotes.join(' ')}</Note>}
 
       {settings.status === 'ready' ? (
         <>
@@ -137,7 +142,7 @@ export function ThinSearchBundleConfig({ runtime }: ThinSearchBundleConfigProps)
               disabled={!settings.writable}
               placeholder={t('enhance.promptPathPlaceholder')}
               hint={t('enhance.promptPathHint')}
-              error={fieldError('validation.enhanceSystemPromptPath')}
+              error={fieldError('enhanceSystemPromptPath')}
               clearLabel={t('settings.clear')}
               commit={(value) => { void runtime.writeSetting('enhanceSystemPromptPath', value) }}
             />
@@ -182,7 +187,7 @@ export function ThinSearchBundleConfig({ runtime }: ThinSearchBundleConfigProps)
               disabled={!settings.writable}
               inputMode="numeric"
               hint={t('advanced.cacheHint')}
-              error={fieldError('validation.cacheTtl')}
+              error={fieldError('cacheTtl')}
               clearLabel={t('settings.clear')}
               commit={commitCacheTtl}
             />
@@ -216,7 +221,7 @@ export function ThinSearchBundleConfig({ runtime }: ThinSearchBundleConfigProps)
               rows={Math.min(8, Math.max(2, settings.values.searxngText.split('\n').length))}
               placeholder={t('advanced.searxngPlaceholder')}
               hint={t('advanced.searxngHint')}
-              error={fieldError('validation.searxng')}
+              error={fieldError('searxngText')}
               clearLabel={t('settings.clear')}
               commit={(value) => { void runtime.writeSetting('searxngText', value) }}
             />
