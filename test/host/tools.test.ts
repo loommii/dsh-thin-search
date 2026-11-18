@@ -171,6 +171,20 @@ describe('host tool contracts', () => {
     expect(captured?.timeRange).toEqual({ days: 3 })
   })
 
+  it('rejects an unknown engine and documents preferred-engine semantics', async () => {
+    const tool = byName(buildTools(), 'advanced_search')
+    await expect(tool.execute({ query: 'q', engine: 'duckduckgo' }, toolExec(new AbortController().signal) as never))
+      .rejects.toThrow('unknown engine')
+    await expect(tool.execute({ query: 'q', engine: 'duckduckgo' }, toolExec(new AbortController().signal) as never))
+      .rejects.toThrow('bing, anysearch, searxng, ddg, ddg-lite')
+    const parameters = tool.parameters as { properties?: Record<string, { description?: string }> }
+    const description = parameters.properties?.engine?.description ?? ''
+    expect(description).toContain('preferred')
+    expect(description).toContain('timeRange')
+    expect(description).toContain('SearXNG')
+    expect(description).toContain('supports time filtering')
+  })
+
   it('returns canonical advanced_search output', async () => {
     const tool = byName(buildTools(), 'advanced_search')
     const value = await tool.execute({ query: 'q', timeRange: 'week', engine: 'bing', maxResults: 50 }, toolExec(new AbortController().signal) as never) as {

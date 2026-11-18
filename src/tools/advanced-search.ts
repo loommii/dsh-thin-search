@@ -32,7 +32,10 @@ export function createAdvancedSearchTool(deps: ToolHostDeps) {
       },
       engine: {
         type: 'string',
-        description: `Optional engine to try first (default: the configured provider): ${ENGINE_IDS.join(', ')}.`,
+        description:
+          `Optional preferred engine (default: the configured provider): ${ENGINE_IDS.join(', ')}. `
+          + 'When timeRange is set, time-capable engines (SearXNG, DDG, DDG-Lite) are tried first; '
+          + 'the preferred engine leads only when it supports time filtering.',
       },
     },
     output: {
@@ -84,6 +87,9 @@ export function createAdvancedSearchTool(deps: ToolHostDeps) {
         }
       }
       const engine = normalizeEngineId(args.engine)
+      if (args.engine !== undefined && engine === undefined) {
+        throw new Error(`unknown engine ${JSON.stringify(args.engine)}; use one of: ${ENGINE_IDS.join(', ')}`)
+      }
       const request: PipelineRequest = {
         query,
         maxResults: Math.min(Math.max(Math.trunc(args.maxResults ?? 5), 1), 10),
