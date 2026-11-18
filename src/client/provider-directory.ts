@@ -72,7 +72,11 @@ export class ProviderDirectory {
     }
   }
 
-  /** Run the current read, then at most one coalesced rerun. */
+  /**
+   * Run the current read, then at most one coalesced rerun. One is an
+   * intentional cap: a later providers-changed event calls refresh() again and
+   * starts the next read once this loop has settled.
+   */
   private async refreshLoop(): Promise<void> {
     this.rerun = false
     await this.readOnce()
