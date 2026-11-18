@@ -21,4 +21,4 @@ export function createEngineMap(engines: readonly SearchEngine[] = ENGINES): Rea
 
 export { anysearchEngine, bingEngine, ddgEngine, ddgLiteEngine, searxngEngine }
 export type { EngineContext, EngineId, SearchEngine } from './types'
-export { ENGINE_IDS, ENGINE_TITLES, normalizeEngineId, supportsTimeRange } from './types'
+export { ENGINE_IDS, ENGINE_TITLES, normalizeEngineId } from './types'
