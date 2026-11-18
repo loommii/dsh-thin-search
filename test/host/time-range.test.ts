@@ -39,6 +39,16 @@ describe('time-range parser', () => {
     expect(parseTimeRange('01-07-2026', NOW)).toBeUndefined()
   })
 
+  it('interprets absolute dates with the local calendar day at UTC+ boundaries', () => {
+    // Local constructor keeps this assertion timezone-independent: 01:00 local
+    // on 2026-11-19 is still the local "today", even when UTC is still 2026-11-18.
+    const localNow = new Date(2026, 10, 19, 1, 0, 0)
+    expect(parseTimeRange('2026-11-19', localNow)).toEqual({ after: '2026-11-19' })
+    expect(parseTimeRange({ after: '2026-11-19' }, localNow)).toEqual({ after: '2026-11-19' })
+    expect(parseTimeRange('2026-11-20', localNow)).toBeUndefined()
+    expect(parseTimeRange({ after: '2026-11-20' }, localNow)).toBeUndefined()
+  })
+
   it('rejects empty, zero, negative and unknown values', () => {
     expect(parseTimeRange(undefined)).toBeUndefined()
     expect(parseTimeRange('')).toBeUndefined()

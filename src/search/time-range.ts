@@ -58,11 +58,17 @@ function relativeUnitToDays(value: number, unit: string): number {
   return value
 }
 
-/** Whether an already-normalized absolute date is later than {@code now}'s UTC day. */
+/**
+ * Whether an already-normalized absolute date is later than {@code now}'s local
+ * calendar day. Absolute dates are interpreted as local calendar dates: the
+ * input date and the local year/month/day are both expanded with
+ * {@link Date.UTC}, so the comparison is a pure calendar comparison and does
+ * not shift at UTC-day boundaries.
+ */
 function isFutureAbsoluteDate(date: string, now: Date): boolean {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number]
   const target = Date.UTC(year, month - 1, day)
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
   return target > today
 }
 
@@ -70,7 +76,8 @@ function isFutureAbsoluteDate(date: string, now: Date): boolean {
  * Parse a time range from a fixed tier, a relative duration ({@code 12h},
  * {@code 3d}, {@code 2mo}, {@code 1y}), an absolute date ({@code 2026-07-01}),
  * or an already-parsed object. Invalid input, including an absolute date later
- * than {@code now}'s day, returns undefined.
+ * than {@code now}'s local calendar day, returns undefined. Absolute dates are
+ * interpreted as local calendar dates, not UTC instants.
  * @param input - tier, duration, date, or already-parsed object.
  * @param now - reference instant for future-date validation; defaults to now.
  */
