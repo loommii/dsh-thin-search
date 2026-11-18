@@ -77,6 +77,8 @@ export class ThinSearchRuntime implements EngineCommandSource {
   /** Latest write token per field; a stale settlement must not clear newer state. */
   private readonly writeTokens = new Map<keyof Draft, number>()
   private writeSequence = 0
+  /** Highest write token whose form.set has settled; stale settlements are ignored. */
+  private lastSettledToken = 0
   private form: ConfigForm<ThinSearchValues> | undefined
   private snapshot: SettingsSnapshot = loadingSnapshot()
 
@@ -118,6 +120,7 @@ export class ThinSearchRuntime implements EngineCommandSource {
     this.form = form
     this.pending.clear()
     this.writeTokens.clear()
+    this.lastSettledToken = 0
     this.sync(form.getSnapshot(), { errors: {}, writeFailed: false })
     const off = form.subscribe(() => { this.sync(form.getSnapshot()) })
     return () => {
@@ -126,6 +129,7 @@ export class ThinSearchRuntime implements EngineCommandSource {
       this.form = undefined
       this.pending.clear()
       this.writeTokens.clear()
+      this.lastSettledToken = 0
       this.snapshot = loadingSnapshot()
       this.notify()
     }
@@ -176,20 +180,29 @@ export class ThinSearchRuntime implements EngineCommandSource {
     try {
       const accepted = await form.set(write.field, write.value)
       if (this.pending.get(field) === token) this.pending.delete(field)
-      const errors = accepted && this.writeTokens.get(field) === token
-        ? this.withoutFieldError(field)
-        : undefined
-      if (this.form === form) {
-        this.sync(form.getSnapshot(), accepted
-          ? errors === undefined ? {} : { errors }
-          : { writeFailed: true })
-      }
+      if (this.form === form) this.sync(form.getSnapshot(), this.settlement(field, token, accepted))
       return accepted
     } catch {
       if (this.pending.get(field) === token) this.pending.delete(field)
-      if (this.form === form) this.sync(form.getSnapshot(), { writeFailed: true })
+      if (this.form === form) this.sync(form.getSnapshot(), this.settlement(field, token, false))
       return false
     }
+  }
+
+  /**
+   * Compute the state overrides for one settled write. A settlement older than
+   * the newest one already applied cannot change global writeFailed; a stale
+   * rejection therefore cannot repaint an error after a newer success. Field
+   * errors still clear only when this is the field's latest attempt.
+   */
+  private settlement(field: keyof Draft, token: number, accepted: boolean): Partial<SettingsSnapshot> {
+    const latestForField = this.writeTokens.get(field) === token
+    const newestSettled = token > this.lastSettledToken
+    if (!newestSettled) return {}
+    this.lastSettledToken = token
+    const writeFailed = accepted ? false : latestForField ? true : this.snapshot.writeFailed
+    const errors = accepted && latestForField ? this.withoutFieldError(field) : undefined
+    return errors === undefined ? { writeFailed } : { writeFailed, errors }
   }
 
   /** Copy the field errors without one field's entry. */

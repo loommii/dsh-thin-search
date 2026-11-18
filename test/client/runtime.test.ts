@@ -108,6 +108,39 @@ describe('ThinSearchRuntime', () => {
     expect(runtime.getSettingsSnapshot().errors.enhanceSystemPromptPath).toBeUndefined()
   })
 
+  it('ignores a stale rejection after a newer successful write (C27-F2)', async () => {
+    const context = createFakeContext({
+      sections: { 'thin-search': { ...DEFAULT_DRAFT, provider: 'bing' }, web: { searchProvider: 'thin-search' } },
+    })
+    const thin = createFakeForm({ value: { ...DEFAULT_DRAFT, provider: 'bing' } })
+    context.forms.set('thin-search', thin as FakeForm<unknown>)
+    const originalSet = thin.form.set.bind(thin.form)
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    let first = true
+    const deferredForm = {
+      ...thin.form,
+      async set(field: string, value: unknown) {
+        if (first) {
+          first = false
+          await gate
+          return false
+        }
+        return originalSet(field, value)
+      },
+    } as unknown as ConfigForm<ThinSearchValues>
+    const runtime = new ThinSearchRuntime(context)
+    runtime.attach(deferredForm)
+
+    const stale = runtime.writeSetting('provider', 'ddg')
+    await expect(runtime.writeSetting('cacheTtl', 0)).resolves.toBe(true)
+    expect(runtime.getSettingsSnapshot().writeFailed).toBe(false)
+    release()
+    await expect(stale).resolves.toBe(false)
+    expect(runtime.getSettingsSnapshot().writeFailed).toBe(false)
+    expect(runtime.getSettingsSnapshot().values.provider).toBe('bing')
+  })
+
   it('reports a Host refusal and restores the accepted values', async () => {
     const { runtime } = attached({ accept: false })
     await expect(runtime.writeSetting('provider', 'ddg')).resolves.toBe(false)
