@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
 import { WebError } from '@deepseek-ai/dsh-web'
 import type { LoggerLike } from '../search/http'
+import { raceWithSignal } from '../util/abort'
 
 /** Built-in fallback prompt used when no prompt file is configured or readable. */
 export const DEFAULT_ENHANCE_SYSTEM_PROMPT = [
@@ -50,36 +51,6 @@ function abortError(signal: AbortSignal | undefined): WebError {
 /** Fresh aborted read; keeps TypeScript narrowing from hiding a later abort. */
 function isAborted(signal: AbortSignal | undefined): boolean {
   return signal?.aborted === true
-}
-
-/** Race one file read against the caller signal without leaking the abort listener. */
-function raceWithSignal<T>(
-  promise: Promise<T>,
-  signal: AbortSignal | undefined,
-  makeError: () => WebError,
-): Promise<T> {
-  if (signal === undefined) return promise
-  if (signal.aborted) {
-    void promise.catch(() => undefined)
-    return Promise.reject(makeError())
-  }
-  return new Promise<T>((resolvePromise, rejectPromise) => {
-    const onAbort = (): void => {
-      signal.removeEventListener('abort', onAbort)
-      rejectPromise(makeError())
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-    void promise.then(
-      (value) => {
-        signal.removeEventListener('abort', onAbort)
-        resolvePromise(value)
-      },
-      (error: unknown) => {
-        signal.removeEventListener('abort', onAbort)
-        rejectPromise(error)
-      },
-    )
-  })
 }
 
 /** Minimal file-like reader used by the bounded prompt read. */
