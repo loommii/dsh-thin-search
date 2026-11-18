@@ -128,21 +128,51 @@ locale keys and patch file are frozen for the v1.0.0 release.
   `engineTimeoutMs`). A slow SearXNG/DDG prefix can no longer consume the whole
   35-second budget and starve Bing or AnySearch when `timeRange` puts the
   time-capable engines first.
+- #1: a time window can no longer degrade silently. When the engine that actually
+  answers cannot apply a native filter (Bing or AnySearch), the result note says
+  the results are not time-filtered; the existing "preferred engine failed" note
+  is unchanged and both notes can appear together.
+- #2: SearXNG sub-path deployments work again. Instances are joined as
+  `<instance>/search`, so `https://host/searxng` requests `/searxng/search`
+  instead of `/search`.
+- #4: absolute dates in the future are rejected as invalid instead of being
+  clamped to one day, in both the string and the `{ after }` forms.
+- #7: `advanced_search` rejects an unknown `engine` value with the list of valid
+  engines instead of silently ignoring it, and the parameter now documents that
+  the hint is a preference: a time window still puts time-capable engines first.
+- #10: DuckDuckGo HTML and DuckDuckGo Lite restore `publishedAt`. A bounded
+  timestamp read emits `YYYY-MM-DD` only when the text parses as a real date.
+- #11: `platform_search` wraps adapter failures as `WebError`, so cancellation is
+  `WEB_ABORTED` and every other failure is `WEB_PROVIDER_ERROR` with the original
+  error as `cause`; the tool result no longer loses its error code.
+- #12: `SearchEngine.supportsTimeRange` is the single source of truth for chain
+  ordering and result notes; the duplicate id-based helper is gone.
+- #13: one `raceWithSignal` helper in `src/util/abort.ts` replaces the three
+  per-module implementations, with unchanged error messages and codes.
+- #14: both tools reuse `clampMaxResults`, so `NaN`, `undefined`, `0` and
+  oversized limits normalize to `5`, `5`, `1` and `10` in one place.
+- #3: a `web/providers-changed` event that arrives during an in-flight provider
+  read now queues exactly one follow-up read instead of being dropped.
+- #5 (F1): validation errors are stored per settings field. A successful write to
+  one field no longer clears another field's error or resets its draft.
+- #6 (F5): the page accepts Windows drive and UNC absolute prompt paths in
+  addition to POSIX and `~/` forms; relative paths stay rejected and the Host
+  remains authoritative for its own platform.
+- #8: the pill menu closes when focus leaves the control or the trigger becomes
+  disabled; Escape, arrow keys and Home/End are unchanged.
+- #9: a failed provider refresh no longer disables the selector while the last
+  accepted list is still usable; the error note and Retry stay visible.
 
 ### Known issues (planned for v1.0.1)
 
 These are client-side polish items recorded by the v1.0.0 cross-review. They do
-not affect search, configuration persistence or provider switching.
+not affect search, configuration persistence or provider switching. F1 and F5 are
+fixed above and removed from this list.
 
-- F1: a global error slot can be cleared by an unrelated successful write while an
-  invalid text draft is reset; the error should stay scoped to its field.
 - F2: `PillSelect` `aria-labelledby` names the control but omits the current value;
   screen readers should hear the selected label.
 - F3: the pill menu has no flip, max-height or overflow handling, so it can be
   clipped near the viewport edge.
-- F5: Windows/UNC prompt paths are rejected by the page validation; the Host
-  accepts platform absolute paths (including `C:\\...` on Windows), so the page is
-  the blocker. The platform-specific path form will be added in v1.0.1.
 - F6: rapid same-field optimistic writes can briefly revert the displayed value
   until the Host snapshot settles.
 - Test gaps to close with those fixes: runtime writable/status guard, page

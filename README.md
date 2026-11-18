@@ -119,7 +119,7 @@ is closed: exactly nine fields.
 | `enhanceSystemPromptPath` | empty | Prompt file; empty uses the built-in prompt. |
 | `bingMarket` | `zh-CN` | Bing `mkt` value. |
 | `region` | empty | DuckDuckGo `kl` value, for example `cn-zh`. |
-| `searxngInstances` | empty | Absolute http(s) SearXNG base URLs; empty uses built-ins. |
+| `searxngInstances` | empty | Absolute http(s) SearXNG base URLs, including sub-path deployments such as `https://host/searxng`; empty uses built-ins. |
 
 Edit them in **Plugins → Installed → dsh-thin-search → Configuration**. This entry
 is the installed bundle's own configuration card; **there is no global Settings item for Thin Search**.
@@ -163,11 +163,12 @@ Prompt text never enters `cordis.patch.yml`. Use a plugin data file such as
 |---|---|---|
 | `free_search_test` | 65 s | Probes engines individually; reports per-engine status. |
 | `platform_search` | 30 s | Searches one enabled platform. |
-| `advanced_search` | 60 s | Web search with `timeRange` and an optional first engine. |
+| `advanced_search` | 60 s | Web search with `timeRange` and an optional preferred engine. |
 
 All three forward `exec.signal` into the HTTP client, so cancellation aborts the
-in-flight request. `platform_search` rejects with the HTTP client code
-`ABORTED`; the pipeline tools reject with `WEB_ABORTED`. Output renders as text
+in-flight request. Every tool rejects with a `WebError`, so the tool result keeps
+an error code: cancellation is `WEB_ABORTED` and any other failure is
+`WEB_PROVIDER_ERROR` with the original error attached as `cause`. Output renders as text
 content blocks, not bare strings, and escapes untrusted title, snippet and URL
 text before composing Markdown.
 
@@ -177,12 +178,16 @@ Without a time window the preferred engine runs first. With a time window,
 time-capable engines (SearXNG, DuckDuckGo, DuckDuckGo Lite) move ahead because
 Bing and AnySearch cannot apply a native filter. Any failure, empty result or
 invalid-URL result falls through to the next engine. The result note names the
-engine that actually answered.
+engine that actually answered, and when that engine cannot apply the window it
+says so explicitly: a time-filtered search never returns silently unfiltered
+results.
 
 Time input accepts `day` / `week` / `month` / `year`, relative durations
 such as `12h`, `3d`, `2mo` or `1y`, and absolute dates such as
 `2026-07-01`. Absolute dates are converted to days from today, then mapped
-to the nearest fixed tier for the time-capable engines.
+to the nearest fixed tier for the time-capable engines. A date in the future is
+rejected as invalid instead of being clamped to the last day, and an unknown
+`engine` value is an error rather than a silently ignored hint.
 
 Network errors, request timeouts and 5xx responses retry once. HTTP 202, 403 and real
 anti-bot interstitials fail immediately and fall through to the next engine.
