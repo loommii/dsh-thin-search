@@ -36,7 +36,7 @@ function shippedFiles(): string[] {
 describe('release package metadata', () => {
   it('declares the repository, homepage, author and bugs metadata', () => {
     expect(pkg['name']).toBe('dsh-thin-search')
-    expect(pkg['version']).toBe('1.0.0')
+    expect(pkg['version']).toBe('1.0.1')
     expect(pkg['license']).toBe('MIT')
     expect(pkg['author']).toContain('loommii')
     expect(pkg['repository']).toEqual({ type: 'git', url: 'git+https://github.com/loommii/dsh-thin-search.git' })
@@ -44,11 +44,12 @@ describe('release package metadata', () => {
     expect(pkg['bugs']).toEqual({ url: 'https://github.com/loommii/dsh-thin-search/issues' })
   })
 
-  it('targets DSH 0.2.2-rc.3 and Node 24.9 through engines and peers', () => {
-    expect(pkg['engines']).toEqual({ node: '>=24.9.0', dsh: '0.2.2-rc.3' })
+  it('targets DSH 0.2.2-rc.3 and 0.2.2-rc.5 and Node 24.9 through engines and peers', () => {
+    expect(pkg['engines']).toEqual({ node: '>=24.9.0', dsh: '0.2.2-rc.3 || 0.2.2-rc.5' })
     for (const name of ['@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-web']) {
-      expect(pkg['peerDependencies'][name]).toBe('0.2.2-rc.3')
+      expect(pkg['peerDependencies'][name]).toBe('0.2.2-rc.3 || 0.2.2-rc.5')
     }
+    expect(pkg['devDependencies']['@deepseek-ai/dsh-web']).toBe('0.2.2-rc.5')
     expect(pkg['dsh']).toEqual({
       bundle: { patch: 'cordis.patch.yml' },
       client: {
@@ -111,11 +112,13 @@ describe('release package metadata', () => {
 })
 
 describe('release documentation', () => {
-  it('ships an MIT LICENSE and a v1.0.0 CHANGELOG with migration notes', () => {
+  it('ships an MIT LICENSE and a v1.0.1 CHANGELOG with migration notes', () => {
     expect(license.startsWith('MIT License')).toBe(true)
     expect(license).toContain('Permission is hereby granted, free of charge')
+    expect(changelog).toContain('## [1.0.1]')
     expect(changelog).toContain('## [1.0.0]')
     expect(changelog).toContain('DSH 0.2.2-rc.3')
+    expect(changelog).toContain('0.2.2-rc.3 || 0.2.2-rc.5')
     expect(changelog.toLowerCase()).toContain('migration')
     expect(changelog).toContain('cacheTtl')
     expect(changelog).toContain('enhanceSystemPromptPath')

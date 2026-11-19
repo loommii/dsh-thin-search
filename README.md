@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/topics/dsh-plugin"><img alt="dsh-plugin" src="https://img.shields.io/badge/dsh-plugin-4d6bfe?style=flat&logo=deepseek&logoColor=white" /></a>
   <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow.svg?style=flat" /></a>
-  <a href="https://www.npmjs.com/package/@deepseek-ai/dsh"><img alt="DSH 0.2.2-rc.3" src="https://img.shields.io/badge/dsh-0.2.2--rc.3-4d6bfe?style=flat" /></a>
+  <a href="https://www.npmjs.com/package/@deepseek-ai/dsh"><img alt="DSH 0.2.2-rc.3 / rc.5" src="https://img.shields.io/badge/dsh-0.2.2--rc.3%20%7C%20rc.5-4d6bfe?style=flat" /></a>
   <a href="https://nodejs.org"><img alt="Node >=24.9" src="https://img.shields.io/badge/node-%3E%3D24.9-339933?style=flat" /></a>
 </p>
 
@@ -17,8 +17,8 @@
   只有在显式开启查询增强时才消耗模型 Token。
 </p>
 
-v1.0.0 是面向 **DSH 0.2.2-rc.3** 的完全重写，**只支持该版本**：不为 DSH 0.1.x、0.2.0 与 0.2.1
-保留兼容分支。
+v1.0.1 面向 **DSH 0.2.2-rc.3 与 0.2.2-rc.5**，两者都在 `engines.dsh` 与 peer 依赖中声明：
+不为 DSH 0.1.x、0.2.0 与 0.2.1 保留兼容分支。
 
 ## ✨ 功能
 
@@ -41,7 +41,7 @@ v1.0.0 是面向 **DSH 0.2.2-rc.3** 的完全重写，**只支持该版本**：�
 
 | 项目 | 要求 |
 |---|---|
-| DSH | `0.2.2-rc.3`（精确版本，声明于 `engines.dsh` 与 peer 依赖） |
+| DSH | `0.2.2-rc.3` 或 `0.2.2-rc.5`（声明于 `engines.dsh` 与 peer 依赖） |
 | Node | Node 24.9 或更新（`engines.node`：`>=24.9.0`） |
 | Cordis | `~4.1.0` |
 | 运行时依赖 | `@deepseek-ai/schemastery`、`node-html-parser` |
@@ -82,7 +82,8 @@ dsh plugin --profile web remove dsh-thin-search
 
 | DSH 版本 | 状态 | 说明 |
 |---|---|---|
-| `0.2.2-rc.3` | ✅ 支持 | v1.0.0 的唯一目标版本，声明在 `engines.dsh` 与 peer 依赖中 |
+| `0.2.2-rc.5` | ✅ 支持 | v1.0.1 起支持；rc.5 的搜索默认改为按模型路由自动选择，显式选中 Thin Search 时仍走本插件 |
+| `0.2.2-rc.3` | ✅ 支持 | v1.0.1 起与 rc.5 并列声明，v1.0.0 的原有目标版本 |
 | 更早的版本 | ❌ 不支持 | 0.2.2-rc.3 之前的版本不受支持：请继续使用 v0.6.x |
 
 ### 从 v0.6.x 及更早版本
@@ -90,7 +91,7 @@ dsh plugin --profile web remove dsh-thin-search
 v0.6.x 面向 DSH 0.1.7–0.2.1，附带插件级 HTTP 代理、设置桥与 UI 引擎测试控件；这些界面在 v1.0.0
 中已移除。
 
-1. 升级到 DSH 0.2.2-rc.3 与 Node 24.9+。无法升级的旧版 DSH 请继续使用 v0.6.x：兼容性由
+1. 升级到 DSH 0.2.2-rc.3 或 0.2.2-rc.5 与 Node 24.9+。无法升级的旧版 DSH 请继续使用 v0.6.x：兼容性由
    `engines.dsh` 与 peer 依赖声明，但插件不做运行时版本闸门。
 2. 用 DSH 全局代理策略替换旧的 `proxy` 字段：启动 DSH 前设置 `HTTP_PROXY`、`HTTPS_PROXY`
    （必要时再加 `NO_PROXY`）。Thin Search 使用共享 HTTP 客户端，不再有插件级代理设置。
@@ -102,7 +103,7 @@ v0.6.x 面向 DSH 0.1.7–0.2.1，附带插件级 HTTP 代理、设置桥与 UI 
 6. 保留既有 Agent 指令：提供方 id `thin-search` 与工具名 `free_search_test`、`platform_search`、
    `advanced_search` 均未改变。
 7. 从 profile 补丁的 `tools` 行删除 `tools.mode` 与 `tools.maxParallelSubCalls`。DSH
-   0.2.2-rc.3 把这两个字段声明为 `z.never()`，任何取值都会被拒绝；组合应改为挂载执行器，
+   0.2.2-rc.3 与 rc.5 都把这两个字段声明为 `z.never()`，任何取值都会被拒绝；组合应改为挂载执行器，
    例如原生或 PTC 工具执行器包（`@deepseek-ai/dsh-tool-executor-native` 或
    `@deepseek-ai/dsh-tool-executor-ptc`），不要设置这两个字段。
 

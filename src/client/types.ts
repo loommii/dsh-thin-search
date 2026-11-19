@@ -1,6 +1,6 @@
 /**
- * Structural declarations for the DSH 0.2.2-rc.3 browser plugin surface this
- * bundle consumes.
+ * Structural declarations for the DSH 0.2.2-rc.3 and 0.2.2-rc.5 browser plugin
+ * surface this bundle consumes.
  *
  * A client bundle may import only the module-table baseline (`react` and
  * `react/jsx-runtime`); every other capability arrives through the Cordis
@@ -80,8 +80,8 @@ export interface ConfigForm<T> {
 /** Owner props of a `plugins.bundle.config` contribution. */
 export interface BundleConfigViewProps {
   /**
-   * The bundle page asks for its configuration body. DSH 0.2.2-rc.3 passes
-   * no form props here; the card reads ConfigForms itself.
+   * The bundle page asks for its configuration body. DSH 0.2.2-rc.3 and
+   * 0.2.2-rc.5 pass no form props here; the card reads ConfigForms itself.
    */
   readonly view: 'page'
 }

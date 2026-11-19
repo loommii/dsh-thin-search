@@ -4,10 +4,10 @@
  * while the Host serves the `thin-search` namespace, and the
  * `/thin-search-engine` command.
  *
- * Bundle configuration receives no owner form props in DSH 0.2.2-rc.3, so the
- * runtime holds `configForms.get('thin-search')` itself. The bundle requires
- * only `react` and `react/jsx-runtime`; services arrive through the Cordis
- * client context.
+ * Bundle configuration receives no owner form props in DSH 0.2.2-rc.3 or
+ * 0.2.2-rc.5, so the runtime holds `configForms.get('thin-search')` itself.
+ * The bundle requires only `react` and `react/jsx-runtime`; services arrive
+ * through the Cordis client context.
  * @module dsh-thin-search/client
  */
 import type { ReactNode } from 'react'

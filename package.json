@@ -1,7 +1,7 @@
 {
   "name": "dsh-thin-search",
-  "version": "1.0.0",
-  "description": "Free, keyless web search for DeepSeekRuntime 0.2.2-rc.3: Bing, AnySearch, SearXNG, DuckDuckGo HTML and Lite with automatic fallback, time ranges, result cache, optional model enhancement, platform search and three Agent tools.",
+  "version": "1.0.1",
+  "description": "Free, keyless web search for DeepSeekRuntime 0.2.2-rc.3 and 0.2.2-rc.5: Bing, AnySearch, SearXNG, DuckDuckGo HTML and Lite with automatic fallback, time ranges, result cache, optional model enhancement, platform search and three Agent tools.",
   "type": "module",
   "main": "lib/index.js",
   "icon": "./icon.svg",
@@ -42,7 +42,7 @@
   "license": "MIT",
   "engines": {
     "node": ">=24.9.0",
-    "dsh": "0.2.2-rc.3"
+    "dsh": "0.2.2-rc.3 || 0.2.2-rc.5"
   },
   "scripts": {
     "typecheck": "npm run typecheck:host && npm run typecheck:client",
@@ -64,19 +64,19 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.1.0",
-    "@deepseek-ai/dsh-agent": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-web": "0.2.2-rc.3"
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.3 || 0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.3 || 0.2.2-rc.5",
+    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.3 || 0.2.2-rc.5",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.3 || 0.2.2-rc.5",
+    "@deepseek-ai/dsh-web": "0.2.2-rc.3 || 0.2.2-rc.5"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "~4.1.0",
-    "@deepseek-ai/dsh-agent": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
-    "@deepseek-ai/dsh-web": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-web": "0.2.2-rc.5",
     "@types/node": "^24.19.2",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
