@@ -3,10 +3,11 @@
  * ConfigForm store, the web provider selection, the provider directory, and
  * the locale dictionary.
  *
- * DSH 0.2.2-rc.3 renders `plugins.bundle.config` without owner form props, so
- * the runtime holds `configForms.get('thin-search')` itself and exposes one
- * synchronous snapshot plus immediate per-field writes. Every write goes
- * through the ConfigForm, which fences it with the latest namespace revision.
+ * DSH 0.2.2-rc.3 and 0.2.2-rc.5 render `plugins.bundle.config` without owner
+ * form props, so the runtime holds `configForms.get('thin-search')` itself and
+ * exposes one synchronous snapshot plus immediate per-field writes. Every write
+ * goes through the ConfigForm, which fences it with the latest namespace
+ * revision.
  * @module dsh-thin-search/client/runtime
  */
 import {

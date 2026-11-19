@@ -4,6 +4,43 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-11-19
+
+Compatibility release for DeepSeekRuntime 0.2.2-rc.5. No host or client behavior
+changes: the 1.0.0 sources compile, test and build unchanged against rc.5.
+
+### Changed
+
+- `engines.dsh` and the five DSH peer dependencies now declare
+  `0.2.2-rc.3 || 0.2.2-rc.5`. rc.5 rejects a plugin whose own `engines.dsh` does
+  not satisfy the running version and skips its whole bundle, so v1.0.0 cannot
+  mount on rc.5.
+- Dev dependencies build and test against `0.2.2-rc.5`.
+- `package.json`, the locale descriptions and the READMEs name both supported
+  releases.
+
+### Notes
+
+- rc.5 auto-selects a search provider per model route while none is configured:
+  `deepseek-official` on the `deepseek-official` and `deepseek-account` routes,
+  `deepseek-search-api` on every other route and outside a model request. The
+  bundle patch still pins `web.searchProvider: thin-search`, so Thin Search wins
+  whenever it is selected; choosing automatic selection in the built-in web
+  search settings hands selection back to DSH.
+- rc.4 renamed DeepSeek's streamed content refusal code to `CONTENT_REFUSED`.
+  Enhancement failures already surface the provider message, so no code change
+  was needed.
+- The F2/F3/F6 client polish items formerly planned for v1.0.1 remain open and
+  move to a later release.
+
+### Verification
+
+- `npm run check` against DSH 0.2.2-rc.5: host and client typechecks, the host,
+  client and integration suites, both tsdown builds and the built-client
+  ModuleLoader smoke.
+- The rc.5 compatibility gate accepts the new range; the rc.3 runtime still
+  satisfies it.
+
 ## [1.0.0] - 2026-11-18
 
 Complete rewrite for DeepSeekRuntime 0.2.2-rc.3. v1.0.0 is a new baseline: it
@@ -171,11 +208,12 @@ locale keys and patch file are frozen for the v1.0.0 release.
 - #9: a failed provider refresh no longer disables the selector while the last
   accepted list is still usable; the error note and Retry stay visible.
 
-### Known issues (planned for v1.0.1)
+### Known issues (deferred past v1.0.1)
 
 These are client-side polish items recorded by the v1.0.0 cross-review. They do
 not affect search, configuration persistence or provider switching. F1 and F5 are
-fixed above and removed from this list.
+fixed above and removed from this list; the remaining items are not part of the
+v1.0.1 compatibility release.
 
 - F2: `PillSelect` `aria-labelledby` names the control but omits the current value;
   screen readers should hear the selected label.

@@ -2,7 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-11-18
-- 适用：dsh-thin-search v1.0.0 / DSH 0.2.2-rc.3
+- 适用：dsh-thin-search v1.0.0–v1.0.1 / DSH 0.2.2-rc.3、0.2.2-rc.5
 - 决策者：lead
 
 ## 背景
@@ -23,9 +23,10 @@ v1.0.0 当前把 Thin Search 配置注册为 `plugins.row.config`，key 为 `dsh
 - `src/client/styles/settings.css`：group 标题、行间距、36px 高/18px 圆角 pill、textarea 样式。
 - `src/host/config.ts`：所有偏好字段是 schemastery `volatile()` 配置，profile 级，不是 session 级。
 
-### DSH 0.2.2-rc.3
+### DSH 0.2.2-rc.3 / 0.2.2-rc.5
 
-已核对 `@deepseek-ai/dsh-client-ui-plugin-manager` / `dsh-client-ui-settings` / `dsh-web` 0.2.2-rc.3 源码与类型：
+已核对 `@deepseek-ai/dsh-client-ui-plugin-manager` / `dsh-client-ui-settings` / `dsh-web` 0.2.2-rc.3 源码与类型；
+v1.0.1 追加核对 0.2.2-rc.5：上述客户端契约所在包的源码与 rc.3 逐字一致，无需改动设置入口。
 
 - `plugins.bundle.config` 是 keyed slot，key = **bundle 包名**；`PackageDetail` 通过
   `renderSlot('plugins.bundle.config', { view: 'page' }, { entryKey: pkg.name })`
@@ -33,8 +34,8 @@ v1.0.0 当前把 Thin Search 配置注册为 `plugins.row.config`，key 为 `dsh
 - `plugins.row.config` 的 key = `<package name>#<row id>`，只用于 row 详情页，且 `RowDetail` 会传 `form` props。
 - **bundle config 页面不传 `form` props**；因此页面必须使用 `ConfigForms.get(entryId)` 自己持有表单，并在 `whileServed([entryId])` 内存活。
 - `ConfigForms.get(entryId)` 返回 `ConfigForm`：`getSnapshot/subscribe/set/mutate/unset`，带 revision 冲突与热更新语义。
-- `ctx.remote.web.listProviders()` 在 0.2.2-rc.3 的 `WebRuntime` 上可用，返回 `{ search, fetch }`。
-- `ctx.locale`、`ctx.slots`、`ctx.inject` 均为 0.2.2-rc.3 客户端契约。
+- `ctx.remote.web.listProviders()` 在 0.2.2-rc.3 与 0.2.2-rc.5 的 `WebRuntime` 上可用，返回 `{ search, fetch }`（rc.5 仅新增可选的 `llmProvider` 请求字段）。
+- `ctx.locale`、`ctx.slots`、`ctx.inject` 均为 0.2.2-rc.3 / 0.2.2-rc.5 客户端契约。
 - `settings.section` 不是本插件应使用的入口；本插件没有全局设置项。
 
 ## 决策

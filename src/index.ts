@@ -1,6 +1,7 @@
 /**
  * dsh-thin-search host entry: registers the {@code thin-search} WebSearchProvider,
- * the three Agent tools, and one system-prompt section against DSH 0.2.2-rc.3.
+ * the three Agent tools, and one system-prompt section against DSH 0.2.2-rc.3 and
+ * 0.2.2-rc.5.
  * @module dsh-thin-search
  */
 import type { Context } from '@deepseek-ai/cordis'

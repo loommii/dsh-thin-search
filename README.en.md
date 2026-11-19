@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/topics/dsh-plugin"><img alt="dsh-plugin" src="https://img.shields.io/badge/dsh-plugin-4d6bfe?style=flat&logo=deepseek&logoColor=white" /></a>
   <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow.svg?style=flat" /></a>
-  <a href="https://www.npmjs.com/package/@deepseek-ai/dsh"><img alt="DSH 0.2.2-rc.3" src="https://img.shields.io/badge/dsh-0.2.2--rc.3-4d6bfe?style=flat" /></a>
+  <a href="https://www.npmjs.com/package/@deepseek-ai/dsh"><img alt="DSH 0.2.2-rc.3 / rc.5" src="https://img.shields.io/badge/dsh-0.2.2--rc.3%20%7C%20rc.5-4d6bfe?style=flat" /></a>
   <a href="https://nodejs.org"><img alt="Node >=24.9" src="https://img.shields.io/badge/node-%3E%3D24.9-339933?style=flat" /></a>
 </p>
 
@@ -17,8 +17,8 @@
   result cache — it spends no model tokens unless query enhancement is explicitly enabled.
 </p>
 
-v1.0.0 is a complete rewrite for **DSH 0.2.2-rc.3** and supports **only that release**: it carries no
-compatibility branches for DSH 0.1.x, 0.2.0 or 0.2.1.
+v1.0.1 targets **DSH 0.2.2-rc.3 and 0.2.2-rc.5**, both declared in `engines.dsh` and the peer
+dependencies: it carries no compatibility branches for DSH 0.1.x, 0.2.0 or 0.2.1.
 
 ## ✨ Features
 
@@ -44,7 +44,7 @@ compatibility branches for DSH 0.1.x, 0.2.0 or 0.2.1.
 
 | Item | Requirement |
 |---|---|
-| DSH | `0.2.2-rc.3` (exact; declared in `engines.dsh` and the peer dependencies) |
+| DSH | `0.2.2-rc.3` or `0.2.2-rc.5` (declared in `engines.dsh` and the peer dependencies) |
 | Node | Node 24.9 or newer (`engines.node`: `>=24.9.0`) |
 | Cordis | `~4.1.0` |
 | Runtime dependencies | `@deepseek-ai/schemastery`, `node-html-parser` |
@@ -86,7 +86,8 @@ Restart afterwards to return to whichever provider the deployment selects next.
 
 | DSH version | Status | Notes |
 |---|---|---|
-| `0.2.2-rc.3` | ✅ Supported | The only target of v1.0.0, declared in `engines.dsh` and the peer dependencies |
+| `0.2.2-rc.5` | ✅ Supported | Supported since v1.0.1; rc.5 auto-selects a search provider per model route, and Thin Search still wins when selected explicitly |
+| `0.2.2-rc.3` | ✅ Supported | Declared alongside rc.5 since v1.0.1; the original v1.0.0 target |
 | Older releases | ❌ Unsupported | v1.0.0 is not supported on older DSH releases; stay on v0.6.x |
 
 ### From v0.6.x or older
@@ -94,7 +95,7 @@ Restart afterwards to return to whichever provider the deployment selects next.
 v0.6.x targeted DSH 0.1.7–0.2.1 and shipped a plugin-level HTTP proxy, a settings bridge and a UI
 engine test control. Those surfaces are removed in v1.0.0.
 
-1. Move to DSH 0.2.2-rc.3 and Node 24.9+. v1.0.0 is not supported on older DSH releases;
+1. Move to DSH 0.2.2-rc.3 or 0.2.2-rc.5 and Node 24.9+. v1.0.0 is not supported on older DSH releases;
    compatibility is declared in `engines.dsh` and the peer dependencies, but the plugin does not
    enforce a runtime version gate.
 2. Replace the old `proxy` field with the DSH global proxy policy: set `HTTP_PROXY`, `HTTPS_PROXY`
@@ -110,7 +111,7 @@ engine test control. Those surfaces are removed in v1.0.0.
 6. Keep existing Agent instructions: the provider id `thin-search` and the tool names
    `free_search_test`, `platform_search` and `advanced_search` are unchanged.
 7. Delete `tools.mode` and `tools.maxParallelSubCalls` from the `tools` row in the profile patch.
-   DSH 0.2.2-rc.3 declares both fields as `z.never()` and rejects every value. The composition
+   DSH 0.2.2-rc.3 and rc.5 declare both fields as `z.never()` and reject every value. The composition
    mounts the executor instead, for example the native or PTC tool-executor bundle
    (`@deepseek-ai/dsh-tool-executor-native` or `@deepseek-ai/dsh-tool-executor-ptc`); do not set
    either field.

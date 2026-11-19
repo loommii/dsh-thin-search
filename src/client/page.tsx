@@ -1,8 +1,9 @@
 /**
  * The Thin Search bundle settings card on the installed-plugin detail page.
  *
- * DSH 0.2.2-rc.3 passes no owner form props to `plugins.bundle.config`, so the
- * card subscribes to the runtime's ConfigForm store instead. Every control
+ * DSH 0.2.2-rc.3 and 0.2.2-rc.5 pass no owner form props to
+ * `plugins.bundle.config`, so the card subscribes to the runtime's ConfigForm
+ * store instead. Every control
  * writes immediately (select on pick, switch on toggle, text on blur/Enter,
  * Escape clears a draft); there is no Save/Discard footer. Layout follows
  * dsh-context v0.85.1: grouped sections, label-left/control-right rows,

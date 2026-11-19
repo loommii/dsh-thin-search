@@ -14,17 +14,20 @@ const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.ur
   dsh: { bundle: { patch: string }; client: { platform: string } }
 }
 
-describe('v1.0.0 package manifest', () => {
-  it('targets DSH 0.2.2-rc.3 and Node 24.9', () => {
+describe('v1.0.1 package manifest', () => {
+  it('targets DSH 0.2.2-rc.3 and 0.2.2-rc.5 and Node 24.9', () => {
     expect(pkg.name).toBe('dsh-thin-search')
-    expect(pkg.version).toBe('1.0.0')
+    expect(pkg.version).toBe('1.0.1')
     expect(pkg.type).toBe('module')
     expect(pkg.main).toBe('lib/index.js')
-    expect(pkg.engines.dsh).toBe('0.2.2-rc.3')
+    expect(pkg.engines.dsh).toBe('0.2.2-rc.3 || 0.2.2-rc.5')
     expect(pkg.engines.node).toBe('>=24.9.0')
     expect(pkg.dsh.bundle.patch).toBe('cordis.patch.yml')
     expect(pkg.dsh.client.platform).toBe('web')
-    expect(pkg.peerDependencies['@deepseek-ai/dsh-web']).toBe('0.2.2-rc.3')
+    for (const name of ['@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-web']) {
+      expect(pkg.peerDependencies[name]).toBe('0.2.2-rc.3 || 0.2.2-rc.5')
+    }
+    expect(pkg.devDependencies['@deepseek-ai/dsh-web']).toBe('0.2.2-rc.5')
     expect(pkg.devDependencies['@deepseek-ai/cordis']).toBe('~4.1.0')
   })
 
